@@ -18,10 +18,59 @@ class Pretty a where
 
   ppr' = ppr 0
 
-instance Pretty Constr where 
-  ppr d (Const n ts)
+instance Pretty CompUnit where 
+  ppr _ (CompUnit imps cs)
+    = hcat (punctuate nl (map ppr' imps ++ map ppr' cs))
+
+instance Pretty Import where 
+  ppr _ (Import qn) 
+    = text "import" <+> ppr' qn <+> semi
+
+instance Pretty Contract where 
+  ppr d (Contract n ts ds)
     = hsep [
-             nest d $ ppr n --- XXX parei aqui   
+             nest d $ text "contract"
+           , ppr' n 
+           , pprTyParams (map TyVar ts) 
+           , text "{\n"
+           , hcat ds'
+           , text "\n}"
+           ]
+      where 
+        ds' = punctuate nl $ map (ppr (d + 3)) ds
+
+instance Pretty Decl where 
+  ppr d (DataDecl dt)
+    = ppr d dt 
+  ppr d (SymDecl ts)
+    = ppr d ts 
+  ppr d (ClassDecl cd)
+    = ppr d cd 
+  ppr d (InstDecl id)
+    = ppr d id 
+  ppr d (FieldDecl fd)
+    = ppr d fd 
+  ppr d (FunDecl fd)
+    = ppr d fd
+
+instance Pretty DataTy where 
+  ppr d (DataTy n ps cs)
+    = hsep $ [
+               nest d $ text "data"
+             , pprTyParams (map TyVar ps) 
+             , equals 
+             ] ++ cs' 
+    where 
+      cs' = punctuate bar $ map ppr' cs 
+      bar = text "|"
+
+instance Pretty Constr where 
+  ppr d (Constr n ts)
+    = hsep [
+             nest d $ ppr' n 
+           , text "("
+           , commaSep $ map ppr' ts 
+           , text ")"
            ]
 
 instance Pretty TySym where 

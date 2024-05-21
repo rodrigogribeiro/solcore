@@ -1,0 +1,12 @@
+contract Nat {
+  data Nat = Zero | Succ[Nat] 
+
+  function add (n : Nat, m : Nat) -> Nat {
+    switch n {
+      case Zero : 
+        m ;  
+      case Succ[n1] :
+        x = Succ[add(n1,m)]; 
+    } ;
+  }
+}

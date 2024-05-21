@@ -1,6 +1,10 @@
 module Main where
 
-import Prelude
+import Solcore.Pipeline.SolcorePipeline
 
 main :: IO ()
-main = putStrLn "Hello world"
+main = pipeline  
+
+
+
+

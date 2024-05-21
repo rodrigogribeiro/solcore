@@ -1,5 +1,5 @@
 {
-module Solcore.Frontend.Parser.SolcoreParser (solCoreParser) where
+module Solcore.Frontend.Parser.SolcoreParser where
 
 import Solcore.Frontend.Lexer.SolcoreLexer
 import Solcore.Frontend.Syntax.Contract
@@ -9,7 +9,8 @@ import Solcore.Frontend.Syntax.Ty
 }
 
 
-%name parser
+%name parser CompilationUnit
+%name equation Equation
 %monad {P}{(>>=)}{return}
 %tokentype { Token }
 %error     { parseError }
@@ -67,7 +68,7 @@ ContractList : ContractList Contract               { $2 : $1 }
 -- contracts 
 
 Contract :: { Contract }
-Contract : 'contract' Name '{' DeclList '}'        { Contract $2 $4 }
+Contract : 'contract' Con OptParam '{' DeclList '}' { Contract $2 $3 $5 }
 
 DeclList :: { [Decl] }
 DeclList : DeclList Decl                           { $2 : $1 }
@@ -91,17 +92,14 @@ FieldDef : Type Name                               {Field $2 $1 Nothing}
 -- algebraic data types 
 
 DataDef :: { DataTy }
-DataDef : 'data' Name OptParam '=' Constrs         {DataTy $2 $3 $5}     
+DataDef : 'data' Con OptParam '=' Constrs          {DataTy $2 $3 $5}     
 
 Constrs :: {[Constr]}
-Constrs : Constr ConstrList                        {$1 : $2}   
-
-ConstrList :: { [Constr] }
-ConstrList : '|' Constr ConstrList                 {$2 : $3}
-           | {- empty -}                           { [] }  
+Constrs : Constr '|' Constrs                       {$1 : $3}
+        | Constr                                   {[$1]}
 
 Constr :: { Constr }
-Constr : Con '(' OptTypeParam ')'                  { Constr $1 $3 }
+Constr : Con OptTypeParam                          { Constr $1 $2 }
 
 -- type synonyms 
 
@@ -115,12 +113,12 @@ ClassDef
   : 'class' Context '=>' Var ':' Con OptParam '{' Signatures '}' {Class $2 $6 $7 $4 $9}
 
 OptParam :: { [Tyvar] }
-OptParam :  '[' Var VarCommaList ']'               {$2 : $3}
+OptParam :  '[' VarCommaList ']'                   {$2}
          | {- empty -}                             {[]}
 
 VarCommaList :: { [Tyvar] }
-VarCommaList : ',' Var VarCommaList                {$2 : $3}          
-             | {- empty -}                         {[]}
+VarCommaList : Var ',' VarCommaList                {$1 : $3} 
+             | Var                                 {[$1]}
 
 Context :: {[Pred]}
 Context : Constraint                               { [ $1 ] }
@@ -142,12 +140,9 @@ Signature :: { Signature }
 Signature : Name '(' ParamList ')' ':' Type        {Signature $1 $3 $6}
 
 ParamList :: { [(Name, Ty)] }
-ParamList : {- empty -}                            {[]}
-          | Param  ParamCommaList                  {$1 : $2}
-
-ParamCommaList :: { [(Name, Ty)] }
-ParamCommaList : ',' Param ParamCommaList          {$2 : $3}
-               | {- empty -}                       {[]}
+ParamList : Param                                  {[$1]}
+          | Param  ',' ParamList                   {$1 : $3}
+          | {- empty -}                            {[]}
 
 Param :: { (Name, Ty) }
 Param : Name ':' Type                              {($1, $3)}
@@ -158,12 +153,12 @@ InstDef :: { Instance }
 InstDef : 'instance' Context '=>' Type ':' Con OptTypeParam '{' Functions '}' { Instance $2 $6 $7 $4 $9 }
 
 OptTypeParam :: { [Ty] }
-OptTypeParam : '[' Type TypeCommaList ']'          {$2 : $3}
-             | {- empty -}                         {[]}
+OptTypeParam : '[' TypeCommaList ']'          {$2}
+             | {- empty -}                    {[]}
 
 TypeCommaList :: { [Ty] }
-TypeCommaList : ',' Type TypeCommaList             {$2 : $3}
-              | {- empty -}                        {[]}
+TypeCommaList : Type ',' TypeCommaList             {$1 : $3}
+              | Type                               {[$1]}
 
 Functions :: { [FunDef] }
 Functions : Function Functions                     {$1 : $2}
@@ -196,19 +191,22 @@ Stmt : Name '=' Expr                               {$1 := $3}
 
 Expr :: { Exp }
 Expr : Name                                        {Var $1}
-     | Con '(' ExprList ')'                        {Con $1 $3}
+     | Con ConArgs                                 {Con $1 $2}
      | Literal                                     {Lit $1}
      | '(' Expr ')'                                {$2}
-     | Name '(' ExprList ')'                       {Call $1 $3}
+     | Name FunArgs                                {Call $1 $2}
      | 'switch' Expr '{' Equations  '}'            {Switch $2 $4}
 
-ExprList :: { [Exp] }
-ExprList : {- empty -}                             {[]}
-         | Expr ExprCommaList                      {$1 : $2}
+ConArgs :: {[Exp]}
+ConArgs : '[' ExprCommaList ']'                    {$2}
+        | {- empty -}                              {[]} 
+
+FunArgs :: {[Exp]} 
+FunArgs : '(' ExprCommaList ')'                    {$2}
 
 ExprCommaList :: { [Exp] }
-ExprCommaList : ',' Expr ExprCommaList             {$2 : $3}
-              | {- empty -}                        {[]}
+ExprCommaList : Expr                               {[$1]}
+              | Expr ',' ExprCommaList             {$1 : $3}
 
 -- Pattern matching equations 
 
@@ -221,17 +219,18 @@ Equation : 'case' Pattern ':' StmtList             {($2, $4)}
 
 Pattern :: { Pat }
 Pattern : Name                                     {PVar $1}
-        | Con '(' PatList ')'                      {PCon $1 $3}
+        | Con PatternList                          {PCon $1 $2}
         | '_'                                      {PWildcard}
         | Literal                                  {PLit $1}
+        | '(' Pattern ')'                          {$2}
+
+PatternList :: {[Pat]}
+PatternList : '[' PatList ']'                      {$2}
+            | {- empty -}                          {[]}
 
 PatList :: { [Pat] }
-PatList : {- empty -}                              {[]}
-        | Pattern PatternCommaList                 {$1 : $2}
-
-PatternCommaList :: { [Pat] }
-PatternCommaList : ',' Pattern PatternCommaList    {$2 : $3}
-                 | {- empty -}                     {[]}
+PatList : Pattern                                  {[$1]}
+        | Pattern ',' PatList                      {$1 : $3}
 
 -- literals 
 

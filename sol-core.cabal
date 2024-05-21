@@ -20,7 +20,8 @@ common common-opts
       base
     , containers
     , array
-    , pretty 
+    , pretty
+    , optparse-applicative
   default-language: Haskell2010
   default-extensions: OverloadedStrings
 
@@ -36,6 +37,7 @@ library
       Solcore.Frontend.Syntax.Contract
       Solcore.Frontend.Syntax.Name 
       Solcore.Frontend.Syntax.Stmt
+      Solcore.Pipeline.SolcorePipeline
 
   hs-source-dirs:
       src

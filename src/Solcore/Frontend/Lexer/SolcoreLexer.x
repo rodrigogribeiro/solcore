@@ -34,7 +34,6 @@ tokens :-
       "class"       {simpleToken TClass}
       "instance"    {simpleToken TInstance}
       "if"          {simpleToken TIf}
-      "then"        {simpleToken TThen}
       "switch"      {simpleToken TSwitch}
       "case"        {simpleToken TCase}
       "while"       {simpleToken TWhile}
@@ -80,7 +79,6 @@ data Lexeme
   | TSwitch
   | TCase
   | TIf 
-  | TThen 
   | TWhile
   | TFunction
   | TSemi
@@ -102,7 +100,6 @@ position (AlexPn _ x y) = (x,y)
 mkIdent :: AlexPosn -> String -> Token 
 mkIdent p s
   | s == "if"   = Token (position p) TIf
-  | s == "then" = Token (position p) TThen
   | s == "while" = Token (position p) TWhile
   | s == "switch" = Token (position p) TSwitch 
   | s == "case" = Token (position p) TCase

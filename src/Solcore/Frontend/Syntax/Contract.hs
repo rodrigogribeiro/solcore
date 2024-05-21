@@ -20,7 +20,8 @@ newtype Import
 
 data Contract 
   = Contract {
-      name :: Name 
+      name :: Name
+    , tyParams :: [Tyvar]
     , decls :: [Decl]
     } deriving (Eq, Ord, Show)
 

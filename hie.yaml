@@ -1,0 +1,8 @@
+cradle:
+  cabal:
+    - path: "./src"
+      component: "lib:sol-core"
+    - path: "./test"
+      component: "test:sol-core-tests"
+    - path: "./app"
+      component: "exe:sol-core"

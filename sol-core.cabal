@@ -1,0 +1,70 @@
+cabal-version: 3.4
+
+name:           sol-core
+version:        0.0.0.0
+-- synopsis:       $synopsis
+-- description:    $description
+-- category:       $category
+-- homepage:       $gitrepo#readme
+-- bug-reports:    $gitrepo/issues
+-- maintainer:     $maintainer
+build-type:     Simple
+
+-- source-repository head
+--   type: git
+--   location: $gitrepo
+
+common common-opts
+
+  build-depends:
+      base
+    , containers
+    , array
+    , pretty 
+  default-language: Haskell2010
+  default-extensions: OverloadedStrings
+
+library
+  import: common-opts
+
+  -- cabal-fmt: expand src
+  exposed-modules:
+      Solcore.Frontend.Lexer.SolcoreLexer
+      Solcore.Frontend.Parser.SolcoreParser
+      Solcore.Frontend.Pretty.SolcorePretty
+      Solcore.Frontend.Syntax.Ty 
+      Solcore.Frontend.Syntax.Contract
+      Solcore.Frontend.Syntax.Name 
+      Solcore.Frontend.Syntax.Stmt
+
+  hs-source-dirs:
+      src
+
+executable sol-core
+  import: common-opts
+  main-is: Main.hs
+  hs-source-dirs:
+      app
+  build-depends: sol-core
+
+test-suite sol-core-tests
+  import: common-opts
+  type: exitcode-stdio-1.0
+  hs-source-dirs: test
+
+  ghc-options:
+    -Wall -threaded -rtsopts -with-rtsopts=-N -fdefer-typed-holes -O0
+
+  main-is: Main.hs
+
+  -- cabal-fmt: expand test -Main
+  other-modules:
+
+  build-depends:
+    , sol-core
+    , hedgehog
+    , hspec
+    , hspec-core
+    , hspec-discover
+    , hspec-expectations
+    , hspec-hedgehog

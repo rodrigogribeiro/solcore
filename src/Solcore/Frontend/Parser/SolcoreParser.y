@@ -71,7 +71,7 @@ Contract :: { Contract }
 Contract : 'contract' Con OptParam '{' DeclList '}' { Contract $2 $3 $5 }
 
 DeclList :: { [Decl] }
-DeclList : DeclList Decl                           { $2 : $1 }
+DeclList : Decl DeclList                           { $1 : $2 }
          | {- empty -}                             { [] }
 
 -- declarations 
@@ -167,7 +167,11 @@ Functions : Function Functions                     {$1 : $2}
 -- Function declaration 
 
 Function :: { FunDef }
-Function : 'function' Name '(' ParamList ')' '->' Type Body {FunDef $2 $7 $4 $8}
+Function : 'function' Name '(' ParamList ')' OptRetTy Body {FunDef $2 $6 $4 $7}
+
+OptRetTy :: { Maybe Ty }
+OptRetTy : '->' Type                               {Just $2}
+         | {- empty -}                             {Nothing}
 
 -- Function body 
 

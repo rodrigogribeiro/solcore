@@ -1,43 +1,45 @@
 module Solcore.Frontend.Pretty.SolcorePretty where 
 
+import Data.List
+
 import Solcore.Frontend.Syntax.Contract
 import Solcore.Frontend.Syntax.Name 
 import Solcore.Frontend.Syntax.Stmt 
 import Solcore.Frontend.Syntax.Ty
-import Text.PrettyPrint.HughesPJ hiding ((<>)) 
 
 -- top level pretty printer function 
 
 pretty :: Pretty a => a -> String 
-pretty = render . ppr'
+pretty = ppr'
 
 class Pretty a where 
-  ppr :: Int -> a -> Doc 
+  ppr :: Int -> a -> String  
 
-  ppr' :: a -> Doc 
+  ppr' :: a -> String  
 
   ppr' = ppr 0
 
 instance Pretty CompUnit where 
   ppr _ (CompUnit imps cs)
-    = hcat (punctuate nl (map ppr' imps ++ map ppr' cs))
+    = unlines (map ppr' imps ++ map ppr' cs)
 
 instance Pretty Import where 
   ppr _ (Import qn) 
-    = text "import" <+> ppr' qn <+> semi
+    = "import" <+> ppr' qn <+> semi
 
 instance Pretty Contract where 
   ppr d (Contract n ts ds)
-    = hsep [
-             nest d $ text "contract"
+    = concat [
+             nest d "contract "
            , ppr' n 
+           , " "
            , pprTyParams (map TyVar ts) 
-           , text "{\n"
-           , hcat ds'
-           , text "\n}"
+           , " {\n"
+           , ds'
+           , "\n}"
            ]
       where 
-        ds' = punctuate nl $ map (ppr (d + 3)) ds
+        ds' = intercalate nl $ map (ppr (d + 3)) ds
 
 instance Pretty Decl where 
   ppr d (DataDecl dt)
@@ -55,28 +57,27 @@ instance Pretty Decl where
 
 instance Pretty DataTy where 
   ppr d (DataTy n ps cs)
-    = hsep $ [
-               nest d $ text "data"
-             , pprTyParams (map TyVar ps) 
-             , equals 
-             ] ++ cs' 
+    = unwords $ [
+                nest d "data"
+              , ppr' n
+              , pprTyParams (map TyVar ps) 
+              , equals 
+              ] ++ cs' 
     where 
-      cs' = punctuate bar $ map ppr' cs 
-      bar = text "|"
+      cs' = intersperse bar $ map ppr' cs 
+      bar = "|"
 
 instance Pretty Constr where 
   ppr d (Constr n ts)
-    = hsep [
-             nest d $ ppr' n 
-           , text "("
-           , commaSep $ map ppr' ts 
-           , text ")"
-           ]
+    = ppr' n <+> pprConstrArgs ts 
+pprConstrArgs :: [Ty] -> String 
+pprConstrArgs [] = ""
+pprConstrArgs ts = commaSep $ map ppr' ts 
 
 instance Pretty TySym where 
   ppr d (TySym n vs ty)
-    = hsep [
-             nest d $ text "type"
+    = unwords [
+             nest d "type"
            , ppr' n 
            , pprTyParams (map TyVar vs) 
            , equals
@@ -85,75 +86,80 @@ instance Pretty TySym where
 
 instance Pretty Class where 
   ppr d (Class ps n vs v sigs)
-    = hsep [
-             nest d $ text "class"
+    = unwords [
+             nest d "class"
            , pprContext ps 
            , ppr' v 
            , colon 
            , ppr' n 
-           , text "{\n"
+           , "{\n"
            , pprSignatures (d + 3) sigs 
-           , text "\n}"
+           , "\n}"
            ]
 
-pprSignatures :: Int -> [Signature] -> Doc 
+pprSignatures :: Int -> [Signature] -> String 
 pprSignatures d 
-  = hcat . punctuate nl . map (ppr d)
+  = intercalate nl . map (ppr d)
 
 instance Pretty Signature where 
   ppr d (Signature n ps ty)
-    = hsep [
+    = unwords [
              function d  
            , ppr' n 
            , pprParams ps 
-           , text "->" 
+           , "->" 
            , ppr' ty 
            ]
 
 instance Pretty Instance where 
   ppr d (Instance ctx n tys ty funs)
-    = hsep [  
+    = unwords [  
              pinst 
            , pprContext ctx
-           , text "=>"
+           ,  "=>"
            , ppr' ty  
            , colon 
            , ppr' n 
            , pprTyParams tys 
-           , text "{\n"
+           , "{\n"
            , pprFunBlock (d + 3) funs 
-           , text "\n}"
+           , "\n}"
            ]
       where 
-        pinst = nest d (text "instance")
+        pinst = nest d "instance"
 
-pprContext :: [Pred] -> Doc 
+pprContext :: [Pred] -> String 
 pprContext ps 
   = parens $ commaSep $ map ppr' ps    
 
-pprFunBlock :: Int -> [FunDef] -> Doc 
+pprFunBlock :: Int -> [FunDef] -> String 
 pprFunBlock d 
-  = hcat . punctuate nl . map (ppr d)
+  = intercalate nl . map (ppr d)
 
 instance Pretty Field where 
   ppr d (Field n ty _)
-    = (nest d $ ppr' n) <+> colon <+> ppr' ty 
+    = nest d $ ppr' ty <+> (ppr' n)
 
 instance Pretty FunDef where 
   ppr d (FunDef n ty ps bd)
-    = hsep [ function d  
+    = concat [ function d 
+           , " "
            , ppr' n 
+           , " "
            , pprParams ps
-           , ty'
+           , " "
+           , pprRetTy ty
            , pprBody d bd 
            ]
-    where
-      ty' = text "->" <+> ppr' ty
 
-pprParams :: [Param] -> Doc 
+pprRetTy :: Maybe Ty -> String 
+pprRetTy (Just t) = "->" <+> (ppr' t ++ " ")
+pprRetTy _        = "" 
+
+pprParams :: [Param] -> String 
 pprParams = parens . commaSep . map pprParam
 
-pprParam :: Param -> Doc 
+pprParam :: Param -> String 
 pprParam (n, ty) 
   = ppr' n <+> colon <+> ppr' ty
 
@@ -161,18 +167,18 @@ instance Pretty Stmt where
   ppr d (n := e) 
     = nest d $ (ppr' n <+> equals <+> ppr' e) <> semi 
   ppr d (If e bd) 
-    = nest d $ text "if" <+> parens (ppr' e) <+> pprBody (d + 3) bd 
+    = nest d $ "if" <+> parens (ppr' e) <+> pprBody (d + 3) bd 
   ppr d (While e bd)
-    = nest d $ text "while" <+> parens (ppr' e) <+> pprBody d bd 
+    = nest d $ "while" <+> parens (ppr' e) <+> pprBody d bd 
   ppr d (StmtExp e)
     = nest d $ ppr d e <> semi 
 
-pprBody :: Int -> Body -> Doc 
-pprBody d bd = nest d (text "{\n") <+> 
-               bd' <+>
-               nest d (text "}\n") 
+pprBody :: Int -> Body -> String 
+pprBody d bd = "{\n" ++ 
+               bd'   ++ 
+               '\n' : nest d "}" 
       where 
-        bd' = hcat $ punctuate (semi <> nl) (map (ppr (d + 3)) bd)
+        bd' = intercalate (semi <> nl) (map (ppr (d + 3)) bd)
 
 instance Pretty Exp where 
   ppr _ (Var v) = ppr' v 
@@ -184,18 +190,18 @@ instance Pretty Exp where
   ppr d (Switch e eqns)
     = switch <+> ppr' e <+> pprSwitchBlock (d + 3) eqns 
       where 
-      switch = nest d (text "switch")
+         switch = nest d "switch"
 
-pprSwitchBlock :: Int -> [(Pat,[Stmt])] -> Doc 
-pprSwitchBlock d es = (nest d $ text "{\n") <> 
-                      (hcat $ map (pprCase (d + 3)) es) <> 
-                      (nest d $ text "}\n")
+pprSwitchBlock :: Int -> [(Pat,[Stmt])] -> String 
+pprSwitchBlock d es = "{\n" <> 
+                      (intercalate "\n" $ map (pprCase (d + 3)) es) <> 
+                      ('\n' : nest d "}")
 
-pprCase :: Int -> (Pat, [Stmt]) -> Doc 
+pprCase :: Int -> (Pat, [Stmt]) -> String 
 pprCase d (p,ss) 
-  = (nest d $ text "case") <+> ppr' p <+> colon <+> nl <+> ss' 
+  = (nest d "case") <+> ppr' p <+> colon <+> nl <+> ss' 
     where 
-      ss' = hcat $ punctuate (semi <> nl) (map (ppr (d + 3)) ss)
+      ss' = intercalate (semi <> nl) (map (ppr (d + 3)) ss)
 
 instance Pretty Pat where 
   ppr _ (PVar n) 
@@ -203,19 +209,19 @@ instance Pretty Pat where
   ppr _ (PCon n ps) 
     = ppr' n <> (parens $ commaSep $ map ppr' ps )
   ppr _ PWildcard 
-    = text "_"
+    = "_"
   ppr _ (PLit l)
     = ppr' l
 
 instance Pretty Literal where 
-  ppr _ (IntLit l) = integer l
+  ppr _ (IntLit l) = show l
 
 instance Pretty Tyvar where 
   ppr _ (TVar n) = ppr' n 
 
 instance Pretty Pred where 
   ppr _ (Pred n t ts) =
-    hsep [
+      intercalate " " [
            ppr' t
          , colon 
          , ppr' n 
@@ -227,29 +233,55 @@ instance Pretty Ty where
   ppr _ (TyCon n ts)
     = ppr' n <> (pprTyParams ts)
 
-pprTyParams :: [Ty] -> Doc 
-pprTyParams [] = empty 
+pprTyParams :: [Ty] -> String 
+pprTyParams [] = "" 
 pprTyParams ts 
   = brackets (commaSep (map ppr' ts))
 
 instance Pretty Name where 
-  ppr _ = text . unName
+  ppr _ = unName
 
 instance Pretty QualName where 
   ppr _ = dotSep . map ppr' . unQName
 
 
-dotSep :: [Doc] -> Doc 
-dotSep = hcat . punctuate dot 
+dotSep :: [String] -> String 
+dotSep = intercalate dot 
          where 
-          dot = text "."
+          dot = "."
 
-commaSep :: [Doc] -> Doc 
-commaSep = hcat . punctuate comma 
+commaSep :: [String] -> String 
+commaSep = intercalate comma 
 
-nl :: Doc
-nl = text "\n"
+nl :: String
+nl = "\n"
 
-function :: Int -> Doc 
+comma :: String 
+comma = ", "
+
+colon :: String 
+colon = ":"
+
+function :: Int -> String  
 function d 
-  = nest d $ text "function"
+  = nest d "function"
+
+-- basic functions 
+
+nest :: Int -> String -> String 
+nest n s = replicate n ' ' ++ s
+
+parens :: String -> String 
+parens s = "(" ++ s ++ ")"
+
+brackets :: String -> String 
+brackets s = "[" ++ s ++ "]"
+
+semi :: String 
+semi = ";"
+
+equals :: String 
+equals = "="
+
+(<+>) :: String -> String -> String 
+s1 <+> s2 = s1 ++ " " ++ s2

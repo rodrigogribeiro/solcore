@@ -90,7 +90,7 @@ data Field
 data FunDef 
   = FunDef {
       funDefName :: Name 
-    , funDefRetTy :: Ty 
+    , funDefRetTy :: Maybe Ty 
     , funDefParams :: [Param]
     , funDefBody :: Body 
     } deriving (Eq, Ord, Show)

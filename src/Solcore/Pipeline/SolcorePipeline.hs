@@ -1,7 +1,8 @@
 module Solcore.Pipeline.SolcorePipeline where
 
 import Options.Applicative 
-import Solcore.Frontend.Parser.SolcoreParser 
+import Solcore.Frontend.Parser.SolcoreParser
+import Solcore.Frontend.Pretty.SolcorePretty 
 
 -- main compiler driver function 
 
@@ -11,7 +12,7 @@ pipeline = do
   content <- readFile (fileName opts)
   case solCoreParser content of 
     Left err -> putStrLn err 
-    Right ast -> print ast
+    Right ast -> putStrLn $ pretty ast
 
 
 -- parsing command line arguments 

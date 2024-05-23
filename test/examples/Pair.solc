@@ -1,0 +1,12 @@
+contract Pair[a,b] {
+   a proj1 
+   b proj2
+
+   function fst () -> a {
+      proj1; 
+   } 
+
+   function snd () -> b {
+      proj2; 
+   }
+}

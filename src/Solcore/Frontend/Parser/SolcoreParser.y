@@ -10,7 +10,6 @@ import Solcore.Frontend.Syntax.Ty
 
 
 %name parser CompilationUnit
-%name equation Equation
 %monad {P}{(>>=)}{return}
 %tokentype { Token }
 %error     { parseError }
@@ -22,6 +21,7 @@ import Solcore.Frontend.Syntax.Ty
       tycon      {Token _ (TTycon $$)}
       'contract' {Token _ TContract}
       'import'   {Token _ TImport}
+      'let'      {Token _ TLet}
       '='        {Token _ TEq}
       '.'        {Token _ TDot}
       'class'    {Token _ TClass}
@@ -30,9 +30,10 @@ import Solcore.Frontend.Syntax.Ty
       'type'     {Token _ TType}
       'switch'   {Token _ TSwitch}
       'case'     {Token _ TCase}
-      'if'       {Token _ TIf}
-      'while'    {Token _ TWhile}
+--      'if'       {Token _ TIf}
+--      'while'    {Token _ TWhile}
       'function' {Token _ TFunction}
+      'constructor' {Token _ TConstructor}
       ';'        {Token _ TSemi}
       ':'        {Token _ TColon}
       ','        {Token _ TComma}
@@ -83,11 +84,12 @@ Decl : FieldDef                                    {FieldDecl $1}
      | ClassDef                                    {ClassDecl $1}
      | InstDef                                     {InstDecl $1}
      | Function                                    {FunDecl $1}
+     | Constructor                                 {ConstrDecl $1}
 
 -- fields 
 
 FieldDef :: { Field }
-FieldDef : Type Name                               {Field $2 $1 Nothing}
+FieldDef : Name ':' Type                           {Field $1 $3 Nothing}
 
 -- algebraic data types 
 
@@ -110,7 +112,10 @@ SymDef : 'type' Con OptParam '=' Type               {TySym $2 $3 $5}
 
 ClassDef :: { Class }
 ClassDef 
-  : 'class' Context '=>' Var ':' Con OptParam '{' Signatures '}' {Class $2 $6 $7 $4 $9}
+  : 'class' ContextOpt Var ':' Con OptParam ClassBody {Class $2 $5 $6 $3 $7}
+
+ClassBody :: {[Signature]}
+ClassBody : '{' Signatures '}'                     {$2}
 
 OptParam :: { [Tyvar] }
 OptParam :  '[' VarCommaList ']'                   {$2}
@@ -120,14 +125,16 @@ VarCommaList :: { [Tyvar] }
 VarCommaList : Var ',' VarCommaList                {$1 : $3} 
              | Var                                 {[$1]}
 
+ContextOpt :: {[Pred]}
+ContextOpt : {- empty -}                           {[]}
+           | Context                               {$1}
+
 Context :: {[Pred]}
-Context : Constraint                               { [ $1 ] }
-        | {- empty -}                              { [] }
-        | '(' Constraint ConstraintList ')'        { $2 : $3 }   
+Context : '[' ConstraintList ']' '=>'              { $2 }   
 
 ConstraintList :: { [Pred] }
-ConstraintList : ',' Constraint ConstraintList     {$2 : $3}
-               | {- empty -}                       {[]}
+ConstraintList : Constraint ',' ConstraintList     {$1 : $3}
+               | Constraint                        {[$1]}
 
 Constraint :: { Pred }
 Constraint : Type ':' Con OptTypeParam             {Pred $3 $1 $4} 
@@ -137,7 +144,7 @@ Signatures : Signature ';' Signatures              {$1 : $3}
            | {- empty -}                           {[]}
 
 Signature :: { Signature }
-Signature : Name '(' ParamList ')' ':' Type        {Signature $1 $3 $6}
+Signature : Name '(' ParamList ')' '->' Type        {Signature $1 $3 $6}
 
 ParamList :: { [(Name, Ty)] }
 ParamList : Param                                  {[$1]}
@@ -150,7 +157,7 @@ Param : Name ':' Type                              {($1, $3)}
 -- instance declarations 
 
 InstDef :: { Instance }
-InstDef : 'instance' Context '=>' Type ':' Con OptTypeParam '{' Functions '}' { Instance $2 $6 $7 $4 $9 }
+InstDef : 'instance' ContextOpt Type ':' Con OptTypeParam InstBody { Instance $2 $5 $6 $3 $7 }
 
 OptTypeParam :: { [Ty] }
 OptTypeParam : '[' TypeCommaList ']'          {$2}
@@ -164,6 +171,9 @@ Functions :: { [FunDef] }
 Functions : Function Functions                     {$1 : $2}
           | {- empty -}                            {[]}
 
+InstBody :: {[FunDef]}
+InstBody : '{' Functions '}'                       {$2}
+
 -- Function declaration 
 
 Function :: { FunDef }
@@ -172,6 +182,11 @@ Function : 'function' Name '(' ParamList ')' OptRetTy Body {FunDef $2 $6 $4 $7}
 OptRetTy :: { Maybe Ty }
 OptRetTy : '->' Type                               {Just $2}
          | {- empty -}                             {Nothing}
+
+-- Contract constructor 
+
+Constructor :: { Constructor }
+Constructor : 'constructor' '(' ParamList ')' Body {Constructor $3 $5}
 
 -- Function body 
 
@@ -187,9 +202,14 @@ StmtList : Stmt ';' StmtList                       {$1 : $3}
 
 Stmt :: { Stmt }
 Stmt : Name '=' Expr                               {$1 := $3}
-     | 'if' Expr Body                              {If $2 $3}
-     | 'while' Expr Body                           {While $2 $3}
+     | 'let' Name ':' Type InitOpt                 {Let $2 $4 $5}
+--     | 'if' Expr Body                              {If $2 $3}
+--     | 'while' Expr Body                           {While $2 $3}
      | Expr                                        {StmtExp $1}
+
+InitOpt :: {Maybe Exp}
+InitOpt : {- empty -}                              {Nothing}
+        | '=' Expr                                 {Just $2}
 
 -- Expressions 
 
@@ -210,6 +230,7 @@ FunArgs : '(' ExprCommaList ')'                    {$2}
 
 ExprCommaList :: { [Exp] }
 ExprCommaList : Expr                               {[$1]}
+              | {- empty -}                         {[]}
               | Expr ',' ExprCommaList             {$1 : $3}
 
 -- Pattern matching equations 
@@ -254,10 +275,9 @@ Var : Name                                         {TVar $1}
 Con :: { Name }
 Con : tycon                                        { Name $1 }
 
-
 QualName :: { [Name] }  
-QualName : Name                                    { [$1] }
-         | QualName '.' Name                       { $3 : $1 }
+QualName : Con                                     { [$1] }
+         | QualName '.' Con                        { $3 : $1 }
 
 Name :: { Name }
 Name : identifier                                  { Name $1 }

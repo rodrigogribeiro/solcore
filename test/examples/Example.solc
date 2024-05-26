@@ -1,0 +1,6 @@
+contract Example {
+   function example (w : Word) -> Word {
+      let x : Word = add(w,1) ; 
+      x ; 
+   }
+}

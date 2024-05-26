@@ -40,6 +40,14 @@ data Constr
     , constrTy :: [Ty]
     } deriving (Eq, Ord, Show)
 
+-- definition of contract constructor 
+
+data Constructor 
+  = Constructor {
+      constrParams :: [Param]
+    , constrBody :: Body 
+    } deriving (Eq, Ord, Show)
+
 -- definition of a synonym 
 
 data TySym 
@@ -104,5 +112,5 @@ data Decl
   | InstDecl Instance 
   | FieldDecl Field 
   | FunDecl FunDef
-  | ConstrDecl Name [Param] Body 
+  | ConstrDecl Constructor
     deriving (Eq, Ord,Show)

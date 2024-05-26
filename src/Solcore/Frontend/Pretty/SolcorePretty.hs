@@ -7,6 +7,7 @@ import Solcore.Frontend.Syntax.Name
 import Solcore.Frontend.Syntax.Stmt 
 import Solcore.Frontend.Syntax.Ty
 
+
 -- top level pretty printer function 
 
 pretty :: Pretty a => a -> String 
@@ -36,10 +37,10 @@ instance Pretty Contract where
            , pprTyParams (map TyVar ts) 
            , " {\n"
            , ds'
-           , "\n}"
+           , "}"
            ]
       where 
-        ds' = intercalate nl $ map (ppr (d + 3)) ds
+        ds' = unlines $ map (ppr (d + 3)) ds
 
 instance Pretty Decl where 
   ppr d (DataDecl dt)
@@ -54,6 +55,16 @@ instance Pretty Decl where
     = ppr d fd 
   ppr d (FunDecl fd)
     = ppr d fd
+  ppr d (ConstrDecl c)
+    = ppr d c 
+
+instance Pretty Constructor where 
+  ppr d (Constructor ps bd)
+    = unwords [
+               nest d $ "constructor"
+              , pprParams ps 
+              , pprBody d bd 
+              ]
 
 instance Pretty DataTy where 
   ppr d (DataTy n ps cs)
@@ -70,6 +81,7 @@ instance Pretty DataTy where
 instance Pretty Constr where 
   ppr d (Constr n ts)
     = ppr' n <+> pprConstrArgs ts 
+
 pprConstrArgs :: [Ty] -> String 
 pprConstrArgs [] = ""
 pprConstrArgs ts = commaSep $ map ppr' ts 
@@ -86,55 +98,58 @@ instance Pretty TySym where
 
 instance Pretty Class where 
   ppr d (Class ps n vs v sigs)
-    = unwords [
-             nest d "class"
+    = concat [
+             nest d "class "
            , pprContext ps 
            , ppr' v 
            , colon 
            , ppr' n 
-           , "{\n"
+           , " {\n"
            , pprSignatures (d + 3) sigs 
-           , "\n}"
+           , nest d "}"
            ]
 
 pprSignatures :: Int -> [Signature] -> String 
 pprSignatures d 
-  = intercalate nl . map (ppr d)
+  = unlines . map (ppr d)
 
 instance Pretty Signature where 
   ppr d (Signature n ps ty)
-    = unwords [
+    = concat [
              function d  
+           , " "
            , ppr' n 
+           , " "
            , pprParams ps 
-           , "->" 
+           , " -> "
            , ppr' ty 
            ]
 
 instance Pretty Instance where 
   ppr d (Instance ctx n tys ty funs)
-    = unwords [  
+    = concat [  
              pinst 
            , pprContext ctx
-           ,  "=>"
            , ppr' ty  
            , colon 
-           , ppr' n 
+           , ppr' n
+           , " "
            , pprTyParams tys 
            , "{\n"
            , pprFunBlock (d + 3) funs 
-           , "\n}"
+           , nest d "}"
            ]
       where 
-        pinst = nest d "instance"
+        pinst = nest d "instance "
 
-pprContext :: [Pred] -> String 
+pprContext :: [Pred] -> String
+pprContext [] = ""
 pprContext ps 
-  = parens $ commaSep $ map ppr' ps    
+  = parens $ (commaSep $ map ppr' ps) ++ " => "
 
 pprFunBlock :: Int -> [FunDef] -> String 
 pprFunBlock d 
-  = intercalate nl . map (ppr d)
+  = unlines . map (ppr d)
 
 instance Pretty Field where 
   ppr d (Field n ty _)
@@ -165,13 +180,19 @@ pprParam (n, ty)
 
 instance Pretty Stmt where 
   ppr d (n := e) 
-    = nest d $ (ppr' n <+> equals <+> ppr' e) <> semi 
-  ppr d (If e bd) 
-    = nest d $ "if" <+> parens (ppr' e) <+> pprBody (d + 3) bd 
-  ppr d (While e bd)
-    = nest d $ "while" <+> parens (ppr' e) <+> pprBody d bd 
+    = nest d $ (ppr' n <+> equals <+> ppr' e)
+  ppr d (Let n ty m)
+    = nest d $ "let" <+> ppr' n <+> colon <+> ppr' ty <+> pprInitOpt m 
+  -- ppr d (If e bd) 
+    -- = nest d $ "if" <+> parens (ppr' e) <+> pprBody (d + 3) bd 
+  -- ppr d (While e bd)
+    -- = nest d $ "while" <+> parens (ppr' e) <+> pprBody d bd 
   ppr d (StmtExp e)
     = nest d $ ppr d e <> semi 
+
+pprInitOpt :: Maybe Exp -> String 
+pprInitOpt Nothing = ""
+pprInitOpt (Just e) = "=" <+> ppr' e 
 
 pprBody :: Int -> Body -> String 
 pprBody d bd = "{\n" ++ 
@@ -183,14 +204,12 @@ pprBody d bd = "{\n" ++
 instance Pretty Exp where 
   ppr _ (Var v) = ppr' v 
   ppr _ (Con n es) 
-    = ppr' n <> (parens $ commaSep $ map ppr' es)
+    = ppr' n <> (brackets $ commaSep $ map ppr' es)
   ppr _ (Lit l) = ppr' l 
   ppr _ (Call n es) 
     = ppr' n <> (parens $ commaSep $ map ppr' es)
   ppr d (Switch e eqns)
-    = switch <+> ppr' e <+> pprSwitchBlock (d + 3) eqns 
-      where 
-         switch = nest d "switch"
+    = "switch" <+> ppr' e <+> pprSwitchBlock d eqns 
 
 pprSwitchBlock :: Int -> [(Pat,[Stmt])] -> String 
 pprSwitchBlock d es = "{\n" <> 
@@ -207,7 +226,7 @@ instance Pretty Pat where
   ppr _ (PVar n) 
     = ppr' n
   ppr _ (PCon n ps) 
-    = ppr' n <> (parens $ commaSep $ map ppr' ps )
+    = ppr' n <> (brackets $ commaSep $ map ppr' ps )
   ppr _ PWildcard 
     = "_"
   ppr _ (PLit l)
@@ -221,7 +240,7 @@ instance Pretty Tyvar where
 
 instance Pretty Pred where 
   ppr _ (Pred n t ts) =
-      intercalate " " [
+      unwords [
            ppr' t
          , colon 
          , ppr' n 

@@ -7,7 +7,7 @@ module Solcore.Frontend.Lexer.SolcoreLexer (Token (..), Lexeme (..), lexer,posit
 %wrapper "posn"
 
 $digit = 0-9            -- digits
-$lower = [a-z]          -- lower case chars 
+$lower = [a-z \_]       -- lower case chars 
 $upper = [A-Z]          -- upper case chars
 $alpha = [a-zA-Z]       -- alphabetic characters
 
@@ -26,6 +26,7 @@ tokens :-
       @number       {mkNumber}
       "contract"    {simpleToken TContract}
       "import"      {simpleToken TImport}
+      "let"         {simpleToken TLet}
       "data"        {simpleToken TData}
       "type"        {simpleToken TType}
       "."           {simpleToken TDot}
@@ -38,6 +39,7 @@ tokens :-
       "case"        {simpleToken TCase}
       "while"       {simpleToken TWhile}
       "function"    {simpleToken TFunction}
+      "constructor" {simpleToken TConstructor}
       "->"          {simpleToken TArrow}
       "=>"          {simpleToken TDArrow}
       ";"           {simpleToken TSemi}
@@ -68,6 +70,7 @@ data Lexeme
   | TNumber { unNum :: Int }
   | TContract 
   | TImport 
+  | TLet
   | TEq 
   | TDot
   | TColon
@@ -81,6 +84,7 @@ data Lexeme
   | TIf 
   | TWhile
   | TFunction
+  | TConstructor 
   | TSemi
   | TWildCard
   | TArrow
@@ -108,6 +112,8 @@ mkIdent p s
   | s == "import" = Token (position p) TImport 
   | s == "contract" = Token (position p) TContract
   | s == "function" = Token (position p) TFunction
+  | s == "constructor" = Token (position p) TConstructor
+  | s == "let" = Token (position p) TLet
   | otherwise = Token (position p) (TIdent s)
 
 mkCon :: AlexPosn -> String -> Token 

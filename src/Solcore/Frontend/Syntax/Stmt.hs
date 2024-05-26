@@ -1,14 +1,16 @@
 module Solcore.Frontend.Syntax.Stmt where 
 
 import Solcore.Frontend.Syntax.Name
+import Solcore.Frontend.Syntax.Ty
 
 -- definition of statements 
 
 data Stmt 
-  = Name := Exp     -- assignment 
-  | If Exp Body     -- conditionals 
-  | While Exp Body  -- loops
-  | StmtExp Exp     -- expression level statements 
+  = Name := Exp             -- assignment
+  | Let Name Ty (Maybe Exp) -- local variable  
+--  | If Exp Body           -- conditionals 
+--  | While Exp Body        -- loops
+  | StmtExp Exp             -- expression level statements 
   deriving (Eq, Ord, Show)
 
 type Body = [Stmt]
@@ -37,6 +39,3 @@ data Pat
 data Literal 
   = IntLit Integer 
   deriving (Eq, Ord, Show)
-
-
-

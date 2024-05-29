@@ -6,11 +6,10 @@ import Solcore.Frontend.Syntax.Ty
 -- definition of statements 
 
 data Stmt 
-  = Name := Exp             -- assignment
-  | Let Name Ty (Maybe Exp) -- local variable  
---  | If Exp Body           -- conditionals 
---  | While Exp Body        -- loops
-  | StmtExp Exp             -- expression level statements 
+  = Exp := Exp                -- assignment
+  | Let Name Ty (Maybe Exp)   -- local variable  
+  | StmtExp Exp               -- expression level statements
+  | Return Exp                -- return statements
   deriving (Eq, Ord, Show)
 
 type Body = [Stmt]
@@ -18,11 +17,12 @@ type Body = [Stmt]
 -- definition of the expression syntax
 
 data Exp 
-  = Var Name              -- variable  
-  | Con Name [Exp]        -- data type constructor
-  | Lit Literal           -- literal 
-  | Call Name [Exp]       -- function call 
-  | Switch Exp [(Pat, [Stmt])] -- pattern matching 
+  = Var Name                       -- variable  
+  | Con Name [Exp]                 -- data type constructor
+  | FieldAccess Exp Name           -- field access  
+  | Lit Literal                    -- literal 
+  | Call (Maybe Exp) Name [Exp]    -- function call
+  | Match [Exp] [(Pat, [Stmt])]    -- pattern matching 
   deriving (Eq, Ord, Show)
 
 -- pattern matching equations 
@@ -37,5 +37,6 @@ data Pat
 -- definition of literals 
 
 data Literal 
-  = IntLit Integer 
+  = IntLit Integer
+  | StrLit String
   deriving (Eq, Ord, Show)

@@ -1,6 +1,6 @@
 contract Equality {
    class a:Eq {
-      isEqual (x1 : a, x2 : a) -> Bool ; 
+      function isEqual (x1 : a, x2 : a) -> Bool ; 
    }
 
    instance Word : Eq {

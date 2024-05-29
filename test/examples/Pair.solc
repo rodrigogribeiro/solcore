@@ -1,6 +1,6 @@
 contract Pair[a,b] {
-   a proj1 
-   b proj2
+   proj1 : a 
+   proj2 : b
 
    function fst () -> a {
       proj1; 

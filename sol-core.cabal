@@ -18,17 +18,22 @@ common common-opts
 
   build-depends:
       base
+    , mtl
     , containers
     , array
+    , pretty 
     , optparse-applicative
   default-language: Haskell2010
   default-extensions: OverloadedStrings
+                      FlexibleInstances
 
 library
   import: common-opts
 
   -- cabal-fmt: expand src
   exposed-modules:
+      Solcore.Desugarer.MatchCompiler
+      Solcore.Desugarer.SolcoreDesugar
       Solcore.Frontend.Lexer.SolcoreLexer
       Solcore.Frontend.Parser.SolcoreParser
       Solcore.Frontend.Pretty.SolcorePretty
@@ -37,6 +42,7 @@ library
       Solcore.Frontend.Syntax.Name 
       Solcore.Frontend.Syntax.Stmt
       Solcore.Pipeline.SolcorePipeline
+      Solcore.Primitives.Primitives
 
   hs-source-dirs:
       src

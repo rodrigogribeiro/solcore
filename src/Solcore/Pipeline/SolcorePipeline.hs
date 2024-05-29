@@ -14,7 +14,6 @@ pipeline = do
     Left err -> putStrLn err 
     Right ast -> putStrLn $ pretty ast
 
-
 -- parsing command line arguments 
 
 data Option 

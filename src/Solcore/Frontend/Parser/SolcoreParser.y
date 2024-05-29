@@ -10,6 +10,7 @@ import Solcore.Frontend.Syntax.Ty
 
 
 %name parser CompilationUnit
+%name declList DeclList 
 %monad {P}{(>>=)}{return}
 %tokentype { Token }
 %error     { parseError }
@@ -19,6 +20,7 @@ import Solcore.Frontend.Syntax.Ty
       identifier {Token _ (TIdent $$)}
       number     {Token _ (TNumber $$)}
       tycon      {Token _ (TTycon $$)}
+      stringlit  {Token _ (TString $$)}
       'contract' {Token _ TContract}
       'import'   {Token _ TImport}
       'let'      {Token _ TLet}
@@ -28,12 +30,10 @@ import Solcore.Frontend.Syntax.Ty
       'instance' {Token _ TInstance}
       'data'     {Token _ TData}
       'type'     {Token _ TType}
-      'switch'   {Token _ TSwitch}
-      'case'     {Token _ TCase}
---      'if'       {Token _ TIf}
---      'while'    {Token _ TWhile}
+      'match'    {Token _ TMatch}
       'function' {Token _ TFunction}
       'constructor' {Token _ TConstructor}
+      'return'   {Token _ TReturn}
       ';'        {Token _ TSemi}
       ':'        {Token _ TColon}
       ','        {Token _ TComma}
@@ -48,6 +48,7 @@ import Solcore.Frontend.Syntax.Ty
       ']'        {Token _ TRBrack}
       '|'        {Token _ TBar}
 
+%expect 0
 
 %%
 -- compilation unit definition 
@@ -144,7 +145,7 @@ Signatures : Signature ';' Signatures              {$1 : $3}
            | {- empty -}                           {[]}
 
 Signature :: { Signature }
-Signature : Name '(' ParamList ')' '->' Type        {Signature $1 $3 $6}
+Signature : 'function' Name '(' ParamList ')' OptRetTy   {Signature $2 $4 $6}
 
 ParamList :: { [(Name, Ty)] }
 ParamList : Param                                  {[$1]}
@@ -201,11 +202,10 @@ StmtList : Stmt ';' StmtList                       {$1 : $3}
 
 
 Stmt :: { Stmt }
-Stmt : Name '=' Expr                               {$1 := $3}
+Stmt : Expr '=' Expr                               {$1 := $3}
      | 'let' Name ':' Type InitOpt                 {Let $2 $4 $5}
---     | 'if' Expr Body                              {If $2 $3}
---     | 'while' Expr Body                           {While $2 $3}
      | Expr                                        {StmtExp $1}
+     | 'return' Expr                               {Return $2}
 
 InitOpt :: {Maybe Exp}
 InitOpt : {- empty -}                              {Nothing}
@@ -218,8 +218,14 @@ Expr : Name                                        {Var $1}
      | Con ConArgs                                 {Con $1 $2}
      | Literal                                     {Lit $1}
      | '(' Expr ')'                                {$2}
-     | Name FunArgs                                {Call $1 $2}
-     | 'switch' Expr '{' Equations  '}'            {Switch $2 $4}
+     | Expr '.' Name                               {FieldAccess $1 $3}
+     | Expr '.' Name FunArgs                       {Call (Just $1) $3 $4}
+     | Name FunArgs                                {Call Nothing $1 $2}
+     | 'match' MatchArgList '{' Equations  '}'     {Match $2 $4}
+
+MatchArgList :: {[Exp]}
+MatchArgList : Expr                                {[$1]}
+             | Expr ',' MatchArgList               {$1 : $3}
 
 ConArgs :: {[Exp]}
 ConArgs : '[' ExprCommaList ']'                    {$2}
@@ -230,7 +236,7 @@ FunArgs : '(' ExprCommaList ')'                    {$2}
 
 ExprCommaList :: { [Exp] }
 ExprCommaList : Expr                               {[$1]}
-              | {- empty -}                         {[]}
+              | {- empty -}                        {[]}
               | Expr ',' ExprCommaList             {$1 : $3}
 
 -- Pattern matching equations 
@@ -240,7 +246,7 @@ Equations : Equation Equations                     {$1 : $2}
           | {- empty -}                            {[]}
 
 Equation :: { (Pat, [Stmt]) }
-Equation : 'case' Pattern ':' StmtList             {($2, $4)}
+Equation : '|' Pattern '=>' StmtList             {($2, $4)}
 
 Pattern :: { Pat }
 Pattern : Name                                     {PVar $1}
@@ -261,6 +267,7 @@ PatList : Pattern                                  {[$1]}
 
 Literal :: { Literal }
 Literal : number                                   {IntLit $ toInteger $1}
+        | stringlit                                {StrLit $1}
 
 -- basic type definitions 
 
@@ -295,5 +302,7 @@ parseError ts
 
 
 solCoreParser :: String -> Either String CompUnit
-solCoreParser = parser . lexer
+solCoreParser s = case lexer s of 
+                    Left err -> Left err 
+                    Right ts -> parser ts
 }

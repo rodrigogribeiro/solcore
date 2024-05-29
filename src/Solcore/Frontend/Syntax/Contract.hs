@@ -72,7 +72,7 @@ data Signature
   = Signature {
       sigName :: Name 
     , sigParams :: [Param]
-    , sigReturn :: Ty 
+    , sigReturn :: Maybe Ty 
     } deriving (Eq, Ord, Show)
 
 data Instance 

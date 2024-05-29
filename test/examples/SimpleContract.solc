@@ -1,5 +1,5 @@
 contract SimpleContract {
-  Word storedData 
+  storedData : Word
 
   function setStoredData (x : Word) {
     storedData = x;

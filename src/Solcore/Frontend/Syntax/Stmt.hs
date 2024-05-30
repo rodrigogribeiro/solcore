@@ -22,7 +22,7 @@ data Exp
   | FieldAccess Exp Name           -- field access  
   | Lit Literal                    -- literal 
   | Call (Maybe Exp) Name [Exp]    -- function call
-  | Match [Exp] [(Pat, [Stmt])]    -- pattern matching 
+  | Match [Exp] [([Pat], [Stmt])]  -- pattern matching 
   deriving (Eq, Ord, Show)
 
 -- pattern matching equations 

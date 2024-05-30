@@ -241,12 +241,16 @@ ExprCommaList : Expr                               {[$1]}
 
 -- Pattern matching equations 
 
-Equations :: { [(Pat, [Stmt])]}
+Equations :: { [([Pat], [Stmt])]}
 Equations : Equation Equations                     {$1 : $2}
           | {- empty -}                            {[]}
 
-Equation :: { (Pat, [Stmt]) }
-Equation : '|' Pattern '=>' StmtList             {($2, $4)}
+Equation :: { ([Pat], [Stmt]) }
+Equation : '|' PatCommaList '=>' StmtList          {($2, $4)}
+
+PatCommaList :: { [Pat] }
+PatCommaList : Pattern                             {[$1]}
+             | Pattern ',' PatCommaList            {$1 : $3}
 
 Pattern :: { Pat }
 Pattern : Name                                     {PVar $1}

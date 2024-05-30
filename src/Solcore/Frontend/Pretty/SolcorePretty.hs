@@ -188,9 +188,9 @@ pprE :: Maybe Exp -> Doc
 pprE Nothing = ""
 pprE (Just e) = ppr e <> text "."
 
-pprCase :: (Pat, [Stmt]) -> Doc 
+pprCase :: ([Pat], [Stmt]) -> Doc 
 pprCase (p,ss) 
-  = text "|" <+> ppr p <+> text "=>" $$ 
+  = text "|" <+> commaSep (map ppr p) <+> text "=>" $$ 
       nest 3 (vcat (map ppr ss))
 
 instance Pretty Pat where 

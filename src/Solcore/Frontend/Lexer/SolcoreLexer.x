@@ -111,6 +111,8 @@ alexEOF = do
     alexError "Error: unclosed string"
   pure $ Token (position pos) TEOF
 
+-- FIXME: Use AlexPosn in the token type to represent the location.
+
 position :: AlexPosn -> (Int, Int)
 position (AlexPn _ x y) = (x,y)
 

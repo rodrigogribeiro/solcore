@@ -1,6 +1,6 @@
 {
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
-module Solcore.Frontend.Lexer.SolcoreLexer (Token (..), Lexeme (..), lexer,position) where
+module Solcore.Frontend.Lexer.SolcoreLexer where
 
 import Control.Monad
 }
@@ -243,5 +243,4 @@ lexer s = runAlex s go
       if lexeme output == TEOF then 
         pure [output]
       else (output :) <$> go
-
 }

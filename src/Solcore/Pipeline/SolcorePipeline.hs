@@ -1,6 +1,7 @@
 module Solcore.Pipeline.SolcorePipeline where
 
 import Options.Applicative 
+import Solcore.Frontend.Lexer.SolcoreLexer
 import Solcore.Frontend.Parser.SolcoreParser
 import Solcore.Frontend.Pretty.SolcorePretty 
 
@@ -10,7 +11,7 @@ pipeline :: IO ()
 pipeline = do 
   opts <- argumentsParser
   content <- readFile (fileName opts)
-  case solCoreParser content of 
+  case runAlex content parser of 
     Left err -> putStrLn err 
     Right ast -> putStrLn $ pretty ast
 

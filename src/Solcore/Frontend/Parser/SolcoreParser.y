@@ -1,7 +1,7 @@
 {
 module Solcore.Frontend.Parser.SolcoreParser where
 
-import Solcore.Frontend.Lexer.SolcoreLexer
+import Solcore.Frontend.Lexer.SolcoreLexer hiding (lexer)
 import Solcore.Frontend.Syntax.Contract
 import Solcore.Frontend.Syntax.Name
 import Solcore.Frontend.Syntax.Stmt
@@ -10,11 +10,10 @@ import Solcore.Frontend.Syntax.Ty
 
 
 %name parser CompilationUnit
-%name declList DeclList 
-%monad {P}{(>>=)}{return}
+%monad {Alex}{(>>=)}{return}
 %tokentype { Token }
 %error     { parseError }
-
+%lexer {lexer}{Token _ TEOF}
 
 %token
       identifier {Token _ (TIdent $$)}
@@ -294,19 +293,13 @@ Name :: { Name }
 Name : identifier                                  { Name $1 }
 
 {
-type P = Either String
+parseError :: Token -> Alex a
+parseError _ 
+  = do 
+        (AlexPn _ line column, _, _, _) <- alexGetInput
+        alexError $ "Parse error at line " ++ show line ++ 
+                    ", column " ++ show column
 
-parseError :: [Token] -> P a
-parseError ts 
-  = Left $ "syntax error at " <> (pErr ts)
-  where  
-    loc (x,y) = unwords ["line:", show x, "column:", show y]
-    pErr (t : _) = loc (pos t)
-    pErr _ = "EOF"
-
-
-solCoreParser :: String -> Either String CompUnit
-solCoreParser s = case lexer s of 
-                    Left err -> Left err 
-                    Right ts -> parser ts
+lexer :: (Token -> Alex a) -> Alex a 
+lexer = (=<< alexMonadScan)
 }

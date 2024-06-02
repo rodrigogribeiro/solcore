@@ -1,6 +1,8 @@
 module Solcore.Pipeline.SolcorePipeline where
 
 import Options.Applicative 
+
+import Solcore.Desugarer.MatchCompiler 
 import Solcore.Frontend.Lexer.SolcoreLexer
 import Solcore.Frontend.Parser.SolcoreParser
 import Solcore.Frontend.Pretty.SolcorePretty 
@@ -13,7 +15,12 @@ pipeline = do
   content <- readFile (fileName opts)
   case runAlex content parser of 
     Left err -> putStrLn err 
-    Right ast -> putStrLn $ pretty ast
+    Right ast -> 
+      do 
+          res <- matchCompiler ast 
+          case res of 
+            Right r -> putStrLn $ pretty r 
+            Left err -> putStrLn err 
 
 -- parsing command line arguments 
 

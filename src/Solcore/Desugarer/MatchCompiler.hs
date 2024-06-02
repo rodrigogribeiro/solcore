@@ -1,4 +1,3 @@
-{-# LANGUAGE TypeFamilies #-}
 module Solcore.Desugarer.MatchCompiler where
 
 import Control.Monad.Except
@@ -16,6 +15,20 @@ import Solcore.Frontend.Syntax.Stmt
 import Solcore.Frontend.Syntax.Name
 
 import Text.PrettyPrint.HughesPJ (render, hsep)
+
+{-
+ Pattern matching compilation
+ ============================
+
+ This module implements the strategy to compile 
+ complex pattern matching into simple over just 
+ one pattern. Such structure can be used 
+ for code generation. 
+
+ We follow the algorithm by Augustsson in: 
+https://link.springer.com/content/pdf/10.1007/3-540-15975-4_48.pdf
+ - -}
+
 
 -- top level interface for the compiler 
 
@@ -57,8 +70,8 @@ freshName :: CompilerM Name
 freshName 
   = do 
         n <- inc 
-        pre <- ask 
-        return (Name (pre ++ show n))
+        -- pre <- ask 
+        return (Name ("var_" ++ show n))
 
 freshExpVar :: CompilerM Exp 
 freshExpVar 
@@ -192,7 +205,7 @@ generateFunctions es d [] = return d
 generateFunctions es d (eqn : eqns)
   = do 
       d' <- generateFunction es d eqn 
-      generateFunctions es d eqns 
+      generateFunctions es d' eqns 
 
 generateFunction :: [Exp] -> [Stmt] -> Equations -> CompilerM [Stmt]
 generateFunction es d eqn 

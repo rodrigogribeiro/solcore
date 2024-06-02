@@ -27,6 +27,7 @@ common common-opts
   default-extensions: OverloadedStrings
                       FlexibleInstances
                       TupleSections
+                      TypeFamilies
 
 library
   import: common-opts

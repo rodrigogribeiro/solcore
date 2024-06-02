@@ -17,4 +17,12 @@ contract MatchExamples {
     | x2 , y2 => 2 ; 
     } ;
   }
+  
+  function testCase5(x : Nat, y : Nat) {
+    match x, y {
+    | Zero, Zero => 1 ;
+    | x2, y2 => 2 ;
+    | Succ[x1],Succ[y1] => 3 ;
+    };
+  }
 }

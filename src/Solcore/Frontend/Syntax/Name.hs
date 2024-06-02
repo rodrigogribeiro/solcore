@@ -5,7 +5,10 @@ import Data.String
 
 newtype Name 
   = Name {unName :: String}
-    deriving (Eq, Ord, Show)
+    deriving (Eq, Ord)
+
+instance Show Name where 
+  show = unName
 
 instance IsString Name where 
   fromString = Name

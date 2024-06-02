@@ -202,9 +202,14 @@ StmtList : Stmt ';' StmtList                       {$1 : $3}
 
 Stmt :: { Stmt }
 Stmt : Expr '=' Expr                               {$1 := $3}
-     | 'let' Name ':' Type InitOpt                 {Let $2 $4 $5}
+     | 'let' Name ':' Type InitOpt                 {Let $2 (Just $4) $5}
      | Expr                                        {StmtExp $1}
      | 'return' Expr                               {Return $2}
+     | 'match' MatchArgList '{' Equations  '}'     {Match $2 $4}
+
+MatchArgList :: {[Exp]}
+MatchArgList : Expr                                {[$1]}
+             | Expr ',' MatchArgList               {$1 : $3}
 
 InitOpt :: {Maybe Exp}
 InitOpt : {- empty -}                              {Nothing}
@@ -220,11 +225,6 @@ Expr : Name                                        {Var $1}
      | Expr '.' Name                               {FieldAccess $1 $3}
      | Expr '.' Name FunArgs                       {Call (Just $1) $3 $4}
      | Name FunArgs                                {Call Nothing $1 $2}
-     | 'match' MatchArgList '{' Equations  '}'     {Match $2 $4}
-
-MatchArgList :: {[Exp]}
-MatchArgList : Expr                                {[$1]}
-             | Expr ',' MatchArgList               {$1 : $3}
 
 ConArgs :: {[Exp]}
 ConArgs : '[' ExprCommaList ']'                    {$2}

@@ -5,11 +5,15 @@ import Solcore.Frontend.Syntax.Ty
 
 -- definition of statements 
 
+type Equation = ([Pat], [Stmt])
+type Equations = [Equation]
+
 data Stmt 
   = Exp := Exp                -- assignment
-  | Let Name Ty (Maybe Exp)   -- local variable  
+  | Let Name (Maybe Ty) (Maybe Exp) -- local variable  
   | StmtExp Exp               -- expression level statements
   | Return Exp                -- return statements
+  | Match [Exp] Equations     -- pattern matching 
   deriving (Eq, Ord, Show)
 
 type Body = [Stmt]
@@ -22,7 +26,6 @@ data Exp
   | FieldAccess Exp Name           -- field access  
   | Lit Literal                    -- literal 
   | Call (Maybe Exp) Name [Exp]    -- function call
-  | Match [Exp] [([Pat], [Stmt])]  -- pattern matching 
   deriving (Eq, Ord, Show)
 
 -- pattern matching equations 

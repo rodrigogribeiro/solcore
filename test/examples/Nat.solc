@@ -2,7 +2,7 @@ contract Nat {
   data Nat = Zero | Succ[Nat] 
 
   function add (n : Nat, m : Nat) -> Nat {
-    match n, m {
+    match n {
     | Zero => 
         m ;  
     | Succ[n1] =>

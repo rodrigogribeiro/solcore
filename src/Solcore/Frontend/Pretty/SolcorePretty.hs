@@ -70,9 +70,10 @@ instance Pretty DataTy where
     where 
       bar = text "|"
 
-instance Pretty Constr where 
+instance Pretty Constr where
+  ppr (Constr n []) = ppr n <> text " "
   ppr (Constr n ts)
-    = ppr n <+> pprConstrArgs ts 
+    = ppr n <> brackets (pprConstrArgs ts)
 
 pprConstrArgs :: [Ty] -> Doc  
 pprConstrArgs [] = empty 
@@ -160,11 +161,26 @@ instance Pretty Stmt where
   ppr (n := e) 
     = ppr n <+> equals <+> ppr e <+> semi 
   ppr (Let n ty m)
-    = text "let" <+> ppr n <+> colon <+> ppr ty <+> pprInitOpt m 
+    = text "let" <+> ppr n <+> pprOptTy ty <+> pprInitOpt m 
   ppr (StmtExp e)
     = ppr e <> semi
   ppr (Return e)
     = text "return" <+> ppr e
+  ppr (Match e eqns)
+    = text "match" <+> 
+      (parens $ commaSep $ map ppr e) <+> 
+      lbrace $$ 
+      vcat (map ppr eqns) $$ 
+      rbrace 
+
+instance Pretty Equation where 
+  ppr (p,ss) 
+    = text "|" <+> commaSep (map ppr p) <+> text "=>" $$ 
+      nest 3 (vcat (map ppr ss))
+
+pprOptTy :: Maybe Ty -> Doc 
+pprOptTy Nothing = empty 
+pprOptTy (Just t) = ppr t 
 
 pprInitOpt :: Maybe Exp -> Doc
 pprInitOpt Nothing = semi
@@ -177,21 +193,10 @@ instance Pretty Exp where
   ppr (Lit l) = ppr l 
   ppr (Call e n es) 
     = pprE e <> ppr n <> (parens $ commaSep $ map ppr es)
-  ppr (Match e eqns)
-    = text "match" <+> 
-      (parens $ commaSep $ map ppr e) <+> 
-      lbrace $$ 
-      vcat (map pprCase eqns) $$ 
-      rbrace 
 
 pprE :: Maybe Exp -> Doc  
 pprE Nothing = ""
 pprE (Just e) = ppr e <> text "."
-
-pprCase :: ([Pat], [Stmt]) -> Doc 
-pprCase (p,ss) 
-  = text "|" <+> commaSep (map ppr p) <+> text "=>" $$ 
-      nest 3 (vcat (map ppr ss))
 
 instance Pretty Pat where 
   ppr (PVar n) 

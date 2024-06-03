@@ -25,4 +25,12 @@ contract MatchExamples {
     | Succ[x1],Succ[y1] => 3 ;
     };
   }
+
+  function testCase6(x : Nat, y : Nat) {
+    match x, y {
+    | x1 , Zero => 1 ; 
+    | Zero, Succ[y2]  => 2 ;
+    | Succ[x3], Succ[y3] => 3;
+    } ; 
+  }
 }

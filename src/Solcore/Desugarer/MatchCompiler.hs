@@ -225,7 +225,9 @@ newFunName
 
 eqnsForConstrs :: [Exp] -> [Stmt] -> Equations -> CompilerM Equations
 eqnsForConstrs es d eqns
-  = concat <$> mapM (eqForConstr es d) (groupByConstr eqns)
+  = concat <$> mapM (eqForConstr es def) (groupByConstr eqns)
+    where 
+      def = [StmtExp (Var (Name "default"))]
 
 eqForConstr :: [Exp] -> [Stmt] -> Equations -> CompilerM Equations 
 eqForConstr es d eqn 

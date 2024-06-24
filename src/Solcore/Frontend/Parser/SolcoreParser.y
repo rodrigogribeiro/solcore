@@ -137,7 +137,7 @@ ConstraintList : Constraint ',' ConstraintList     {$1 : $3}
                | Constraint                        {[$1]}
 
 Constraint :: { Pred }
-Constraint : Type ':' Con OptTypeParam             {Pred $3 $1 $4} 
+Constraint : Type ':' Con OptTypeParam             {InCls $3 $1 $4} 
 
 Signatures :: { [Signature] }
 Signatures : Signature ';' Signatures              {$1 : $3}

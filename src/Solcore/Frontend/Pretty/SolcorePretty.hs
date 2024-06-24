@@ -219,8 +219,10 @@ instance Pretty Tyvar where
   ppr (TVar n) = ppr n 
 
 instance Pretty Pred where 
-  ppr (Pred n t ts) =
+  ppr (InCls n t ts) =
     ppr t <+> colon <+> ppr n <+> pprTyParams ts 
+  ppr (t1 :~: t2) = 
+    ppr t1 <+> text "~" <+> ppr t2
 
 instance Pretty Ty where 
   ppr (TyVar v) = ppr v 

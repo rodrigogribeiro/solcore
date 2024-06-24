@@ -4,7 +4,17 @@ import Solcore.Frontend.Syntax.Contract
 import Solcore.Frontend.Syntax.Name
 import Solcore.Frontend.Syntax.Stmt 
 import Solcore.Frontend.Syntax.Ty 
--- 
+
+-- basic types 
+
+word :: Ty 
+word = TyCon "Word" []
+
+string :: Ty 
+string = TyCon "String" []
+
+arr :: Name  
+arr = "->"
 
 -- desugaring interface for load / store 
 

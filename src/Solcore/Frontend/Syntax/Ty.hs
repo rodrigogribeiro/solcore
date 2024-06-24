@@ -14,23 +14,45 @@ data Ty
   | TyCon Name [Ty]  -- type constructor 
   deriving (Eq, Ord, Show)
 
-pattern (+->) a b 
-  = TyCon arr [a, b]
+infixr 5 :-> 
+
+pattern (:->) a b 
+  = TyCon (Name "->") [a, b]
+
+argTy :: Ty -> [Ty]
+argTy (t1 :-> t2) = t1 : argTy t2 
+argTy _ = []
+
+retTy :: Ty -> Maybe Ty
+retTy (TyVar _) = Nothing 
+retTy (t1 :-> t2) = ret t2
+  where 
+    ret (ta :-> tb) = ret tb 
+    ret t = Just t
 
 -- definition of constraints 
 
-data Pred = Pred {
+data Pred = InCls {
               predName :: Name 
             , predMain :: Ty 
             , predParams :: [Ty]
-            } deriving (Eq, Ord, Show)
+            } 
+          | Ty :~: Ty 
+          deriving (Eq, Ord, Show)
 
--- basic types 
 
-word :: Ty 
-word = TyCon "Word" []
+-- qualified types 
 
-arr :: Name  
-arr = "->"
+data Qual t 
+  = [Pred] :=> t 
+    deriving (Eq, Ord, Show)
+
+infix 2 :=> 
+
+-- type schemes 
+
+data Scheme 
+  = Forall [Tyvar] (Qual Ty) 
+    deriving (Eq, Ord, Show)
 
 

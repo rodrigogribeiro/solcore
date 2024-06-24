@@ -49,6 +49,8 @@ instance Pretty Decl where
     = ppr fd 
   ppr (FunDecl fd)
     = ppr fd
+  ppr (MutualDecl ds) 
+    = vcat (map ppr ds)
   ppr (ConstrDecl c)
     = ppr c 
 

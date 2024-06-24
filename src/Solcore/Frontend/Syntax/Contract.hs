@@ -112,5 +112,6 @@ data Decl
   | InstDecl Instance 
   | FieldDecl Field 
   | FunDecl FunDef
+  | MutualDecl [Decl] -- used only after SCC analysis
   | ConstrDecl Constructor
     deriving (Eq, Ord,Show)

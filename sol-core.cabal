@@ -20,12 +20,15 @@ common common-opts
       base
     , mtl
     , containers
+    , fgl
     , array
     , pretty 
     , optparse-applicative
   default-language: Haskell2010
   default-extensions: OverloadedStrings
                       FlexibleInstances
+                      FlexibleContexts
+                      PatternSynonyms
                       TupleSections
                       TypeFamilies
 
@@ -39,10 +42,17 @@ library
       Solcore.Frontend.Lexer.SolcoreLexer
       Solcore.Frontend.Parser.SolcoreParser
       Solcore.Frontend.Pretty.SolcorePretty
+      Solcore.Frontend.Syntax
       Solcore.Frontend.Syntax.Ty 
       Solcore.Frontend.Syntax.Contract
       Solcore.Frontend.Syntax.Name 
       Solcore.Frontend.Syntax.Stmt
+      Solcore.Frontend.TypeInference.NameSupply
+      Solcore.Frontend.TypeInference.SccAnalysis 
+      Solcore.Frontend.TypeInference.TcMonad
+      Solcore.Frontend.TypeInference.TcStmt
+      Solcore.Frontend.TypeInference.TcSubst
+      Solcore.Frontend.TypeInference.TcUnify
       Solcore.Pipeline.SolcorePipeline
       Solcore.Primitives.Primitives
 

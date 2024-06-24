@@ -2,7 +2,7 @@ module Solcore.Frontend.Syntax.Contract where
 
 import Solcore.Frontend.Syntax.Name
 import Solcore.Frontend.Syntax.Stmt
-import Solcore.Frontend.Syntax.Ty 
+import Solcore.Frontend.Syntax.Ty hiding (Class) 
 
 -- compilation unit 
 

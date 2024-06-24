@@ -21,19 +21,26 @@ common common-opts
     , mtl
     , containers
     , array
-    , pretty 
+    , pretty
+    , fgl
     , optparse-applicative
   default-language: Haskell2010
   default-extensions: OverloadedStrings
                       FlexibleInstances
+                      FlexibleContexts
                       TupleSections
                       TypeFamilies
+                      InstanceSigs
+                      PatternSynonyms
+                      BlockArguments
 
 library
   import: common-opts
 
   -- cabal-fmt: expand src
   exposed-modules:
+      Solcore.Desugarer.Defunctionalizer
+      Solcore.Desugarer.InternalSyntaxCompiler
       Solcore.Desugarer.MatchCompiler
       Solcore.Desugarer.SolcoreDesugar
       Solcore.Frontend.Lexer.SolcoreLexer
@@ -43,6 +50,15 @@ library
       Solcore.Frontend.Syntax.Contract
       Solcore.Frontend.Syntax.Name 
       Solcore.Frontend.Syntax.Stmt
+      Solcore.Frontend.TypeInference.AbsFun
+      Solcore.Frontend.TypeInference.Checker
+      Solcore.Frontend.TypeInference.Constraints
+      Solcore.Frontend.TypeInference.Desugar
+      Solcore.Frontend.TypeInference.ISyntax
+      Solcore.Frontend.TypeInference.NameSupply
+      Solcore.Frontend.TypeInference.PrintFun
+      Solcore.Frontend.TypeInference.Specialise
+      Solcore.Frontend.TypeInference.TcMonad
       Solcore.Pipeline.SolcorePipeline
       Solcore.Primitives.Primitives
 

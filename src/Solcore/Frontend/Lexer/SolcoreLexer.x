@@ -52,6 +52,7 @@ tokens :-
         <0>    "function"                        {simpleToken TFunction}
         <0>    "constructor"                     {simpleToken TConstructor}
         <0>    "return"                          {simpleToken TReturn}
+        <0>    "lam"                             {simpleToken TLam}
         <0>    "->"                              {simpleToken TArrow}
         <0>    "=>"                              {simpleToken TDArrow}
         <0>    ";"                               {simpleToken TSemi}
@@ -146,6 +147,7 @@ data Lexeme
   | TFunction
   | TConstructor
   | TReturn 
+  | TLam 
   | TSemi
   | TWildCard
   | TArrow
@@ -174,6 +176,7 @@ mkIdent (st, _, _, str) len
       "constructor" -> return $ Token (position st) TConstructor
       "return" -> return $ Token (position st) TReturn 
       "let" -> return $ Token (position st) TLet
+      "lam" -> return $ Token (position st) TLam
       _ -> return $ Token (position st) (TIdent $ take len str)
 
 mkCon :: AlexAction Token 

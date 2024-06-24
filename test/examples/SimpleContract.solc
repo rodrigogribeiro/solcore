@@ -1,11 +1,11 @@
 contract SimpleContract {
-  storedData : Word
+  storedData : Int
 
-  function setStoredData (x : Word) {
+  function setStoredData (x : Int) {
     storedData = x;
   }
 
-  function getStoredData () -> Word {
+  function getStoredData () -> Int {
     storedData;  
   }
 }

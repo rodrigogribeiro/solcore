@@ -7,7 +7,7 @@ import Prelude hiding ((<>))
 import Solcore.Frontend.Syntax.Contract
 import Solcore.Frontend.Syntax.Name 
 import Solcore.Frontend.Syntax.Stmt 
-import Solcore.Frontend.Syntax.Ty
+import Solcore.Frontend.Syntax.Ty hiding (Class)
 
 import Text.PrettyPrint.HughesPJ
 
@@ -18,6 +18,10 @@ pretty = render . ppr
 
 class Pretty a where 
   ppr :: a -> Doc  
+
+instance Pretty a => Pretty (Maybe a) where 
+  ppr Nothing = empty 
+  ppr (Just x) = ppr x
 
 instance Pretty CompUnit where 
   ppr (CompUnit imps cs)
@@ -161,7 +165,7 @@ instance Pretty Stmt where
   ppr (n := e) 
     = ppr n <+> equals <+> ppr e <+> semi 
   ppr (Let n ty m)
-    = text "let" <+> ppr n <+> pprOptTy ty <+> pprInitOpt m 
+    = text "let" <+> ppr n <+> ppr ty <+> pprInitOpt m 
   ppr (StmtExp e)
     = ppr e <> semi
   ppr (Return e)
@@ -178,10 +182,6 @@ instance Pretty Equation where
     = text "|" <+> commaSep (map ppr p) <+> text "=>" $$ 
       nest 3 (vcat (map ppr ss))
 
-pprOptTy :: Maybe Ty -> Doc 
-pprOptTy Nothing = empty 
-pprOptTy (Just t) = ppr t 
-
 pprInitOpt :: Maybe Exp -> Doc
 pprInitOpt Nothing = semi
 pprInitOpt (Just e) = equals <+> ppr e <+> semi 
@@ -193,6 +193,16 @@ instance Pretty Exp where
   ppr (Lit l) = ppr l 
   ppr (Call e n es) 
     = pprE e <> ppr n <> (parens $ commaSep $ map ppr es)
+  ppr (Lam ps t bd)
+    = text "lam" <+> pprLamParams ps <+> text "->" <+> 
+      ppr t <+> lbrace $$ nest 3 (vcat (map ppr bd)) $$ rbrace 
+
+pprLamParams :: [(Name, Maybe Ty)] -> Doc 
+pprLamParams 
+  = parens . commaSep . map pprOptTyParam 
+    where 
+      pprOptTyParam (n, Just mt) = ppr n <+> colon <+> ppr mt 
+      pprOptTyParam (n, Nothing) = ppr n
 
 pprE :: Maybe Exp -> Doc  
 pprE Nothing = ""
@@ -217,13 +227,21 @@ instance Pretty Tyvar where
   ppr (TVar n) = ppr n 
 
 instance Pretty Pred where 
-  ppr (Pred n t ts) =
+  ppr (InCls n t ts) =
     ppr t <+> colon <+> ppr n <+> pprTyParams ts 
+  ppr (t1 :~: t2) = ppr t1 <+> text "~" <+> ppr t2
 
 instance Pretty Ty where 
   ppr (TyVar v) = ppr v 
   ppr (TyCon n ts)
-    = ppr n <> (pprTyParams ts)
+    | n == arr = pprArrTy (unsnoc ts)
+    | otherwise 
+      = ppr n <> (pprTyParams ts)
+
+pprArrTy :: Maybe ([Ty], Ty) -> Doc 
+pprArrTy Nothing = empty 
+pprArrTy (Just (ts, t))
+    = parens (commaSep (map ppr ts)) <+> text "->" <+> ppr t 
 
 pprTyParams :: [Ty] -> Doc 
 pprTyParams [] = empty 

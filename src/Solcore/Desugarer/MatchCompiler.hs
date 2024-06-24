@@ -9,7 +9,6 @@ import Control.Monad.Writer
 import Data.Either 
 import Data.List
 
-import Solcore.Frontend.Pretty.SolcorePretty
 import Solcore.Frontend.Syntax.Contract
 import Solcore.Frontend.Syntax.Stmt 
 import Solcore.Frontend.Syntax.Name
@@ -255,7 +254,6 @@ groupByConstr
       conEq ((PCon n _) : _, _) ((PCon n' _) : _ , _) = n == n' 
       conEq _ _ = False
 
--- probably here is the bug: we need the old-patterns to be part of the new set of equations.
 
 eqnsForVars :: [Exp] -> [Stmt] -> Equations -> CompilerM Equations 
 eqnsForVars es d eqns 

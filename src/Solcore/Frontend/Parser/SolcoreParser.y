@@ -5,7 +5,7 @@ import Solcore.Frontend.Lexer.SolcoreLexer hiding (lexer)
 import Solcore.Frontend.Syntax.Contract
 import Solcore.Frontend.Syntax.Name
 import Solcore.Frontend.Syntax.Stmt
-import Solcore.Frontend.Syntax.Ty
+import Solcore.Frontend.Syntax.Ty hiding (Class)
 }
 
 
@@ -33,6 +33,7 @@ import Solcore.Frontend.Syntax.Ty
       'function' {Token _ TFunction}
       'constructor' {Token _ TConstructor}
       'return'   {Token _ TReturn}
+      'lam'      {Token _ TLam}
       ';'        {Token _ TSemi}
       ':'        {Token _ TColon}
       ','        {Token _ TComma}
@@ -137,7 +138,7 @@ ConstraintList : Constraint ',' ConstraintList     {$1 : $3}
                | Constraint                        {[$1]}
 
 Constraint :: { Pred }
-Constraint : Type ':' Con OptTypeParam             {Pred $3 $1 $4} 
+Constraint : Type ':' Con OptTypeParam             {InCls $3 $1 $4} 
 
 Signatures :: { [Signature] }
 Signatures : Signature ';' Signatures              {$1 : $3}
@@ -225,6 +226,20 @@ Expr : Name                                        {Var $1}
      | Expr '.' Name                               {FieldAccess $1 $3}
      | Expr '.' Name FunArgs                       {Call (Just $1) $3 $4}
      | Name FunArgs                                {Call Nothing $1 $2}
+     | 'lam' LamParams '->' TypeOpt Body           {Lam $2 $4 $5}
+
+TypeOpt :: {Maybe Ty}
+TypeOpt : {- empty -}                              {Nothing}
+        | Type                                     {Just $1}
+
+LamParams :: {[(Name, Maybe Ty)]}
+LamParams : '(' NameOptTyList ')'                  {$2}
+
+
+NameOptTyList :: {[(Name, Maybe Ty)]}
+NameOptTyList : {- empty -}                        {[]}
+              | Name ':' Type ',' NameOptTyList    {($1, Just $3) : $5}
+              | Name ',' NameOptTyList             {($1, Nothing) : $3}
 
 ConArgs :: {[Exp]}
 ConArgs : '[' ExprCommaList ']'                    {$2}

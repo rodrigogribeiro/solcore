@@ -26,16 +26,18 @@ data Exp
   | FieldAccess Exp Name           -- field access  
   | Lit Literal                    -- literal 
   | Call (Maybe Exp) Name [Exp]    -- function call
+  | Lam [(Name, Maybe Ty)] (Maybe Ty) Body -- anonymous function
   deriving (Eq, Ord, Show)
 
 -- pattern matching equations 
 
 data Pat 
-  = PVar Name 
-  | PCon Name [Pat] 
+  = PCon Name [Pat] 
   | PWildcard 
   | PLit Literal 
   deriving (Eq, Ord, Show)
+
+pattern PVar n = PCon n []
 
 -- definition of literals 
 

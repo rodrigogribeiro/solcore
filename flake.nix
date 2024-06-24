@@ -41,6 +41,7 @@
           ];
           buildInputs = with pkgs;
             [
+              solc 
               hsPkgs.haskell-language-server
               haskellPackages.cabal-install
               haskellPackages.alex 

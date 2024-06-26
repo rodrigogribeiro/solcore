@@ -154,11 +154,14 @@ pprRetTy :: Ty -> Doc
 pprRetTy t = text "->" <+> ppr t
 
 pprParams :: [Param] -> Doc  
-pprParams = parens . commaSep . map pprParam
+pprParams = parens . commaSep . map ppr
 
-pprParam :: Param -> Doc 
-pprParam (n, ty) 
-  = ppr n <+> colon <+> ppr ty
+instance Pretty Param where 
+  ppr (Typed n ty) 
+    = ppr n <+> colon <+> ppr ty
+  ppr (Untyped n)
+    = ppr n
+
 
 instance Pretty Stmt where 
   ppr (n := e) 

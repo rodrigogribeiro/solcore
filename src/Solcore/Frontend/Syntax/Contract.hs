@@ -102,7 +102,10 @@ data FunDef
     , funDefBody :: Body 
     } deriving (Eq, Ord, Show)
 
-type Param = (Name, Ty)
+data Param 
+  = Typed Name Ty 
+  | Untyped Name 
+  deriving (Eq, Ord, Show)
 
 data Decl 
   = DataDecl DataTy 

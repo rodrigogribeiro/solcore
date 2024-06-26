@@ -151,13 +151,14 @@ ConOpt :: {[Pred]}
 ConOpt : {- empty -}                               {[]}
        | '[' ConstraintList ']'                    {$2}
 
-ParamList :: { [(Name, Ty)] }
+ParamList :: { [Param] }
 ParamList : Param                                  {[$1]}
           | Param  ',' ParamList                   {$1 : $3}
           | {- empty -}                            {[]}
 
-Param :: { (Name, Ty) }
-Param : Name ':' Type                              {($1, $3)}
+Param :: { Param }
+Param : Name ':' Type                              {Typed $1 $3}
+      | Name                                       {Untyped $1}
 
 -- instance declarations 
 

@@ -43,8 +43,12 @@ tcBindGroup = undefined
 
 tcConstructor :: Constructor -> TcM ()
 tcConstructor (Constructor ps bd) 
-  = withLocalCtx (map (\ (n,t) -> (n, monotype t)) ps) 
-                 (mapM_ tcStmt bd) 
+  = do
+      -- building parameters for constructors
+      let f (Typed n t) = pure (n, monotype t)
+          f (Untyped n) = ((n,) . monotype) <$> freshTyVar
+      lctx <- mapM f ps 
+      withLocalCtx lctx (mapM_ tcStmt bd) 
   
 -- checking class definitions and adding them to environment 
 
@@ -56,19 +60,20 @@ checkClass (Class ps n vs v sigs)
   = mapM_ checkSignature sigs 
     where
       checkSignature sig@(Signature f ctx ps mt)
-        | null ctx && v `elem` fv (sigType ps mt) 
-          = addClassMethod (InCls n (TyVar v) (TyVar <$> vs))
+        = do 
+            pst <- mapM tyParam ps 
+            unless (null ctx && v `elem` fv (funtype pst mt))
+                   (throwError $ "invalid class declaration: " ++ unName n)
+            addClassMethod (InCls n (TyVar v) (TyVar <$> vs))
                            sig 
-        | otherwise = 
-          throwError $ 
-              "invalid class declaration: " ++ (unName n)
 
 addClassMethod :: Pred -> Signature -> TcM ()
-addClassMethod p@(InCls _ _ _) (Signature f ctx ps mt) 
-  = extFunEnv f (Forall vs ([p] :=> ty))
-    where 
-      ty = sigType ps mt 
-      vs = fv ty 
+addClassMethod p@(InCls _ _ _) (Signature f ctx ps t) 
+  = do
+      tps <- mapM tyParam ps  
+      let ty = funtype tps t
+          vs = fv ty
+      extFunEnv f (Forall vs ([p] :=> ty))
 addClassMethod p@(_ :~: _) (Signature n _ _ _) 
   = throwError $ unlines [
                     "Invalid constraint:"
@@ -76,9 +81,6 @@ addClassMethod p@(_ :~: _) (Signature n _ _ _)
                   , "in class method:"
                   , unName n
                   ]
-
-sigType :: [Param] -> Ty -> Ty 
-sigType ps t = funtype (map snd ps) t
 
 -- checking instances and adding them in the environment
 
@@ -145,9 +147,14 @@ checkMethod ih@(InCls n t ts) (FunDef sig bd)
                       (findPred n qs)
       s <- liftEither (matchPred p ih) `wrapError` ih
       (qs' :=> ty') <- freshInst st 
-      let it = funtype (map snd (sigParams sig)) (sigReturn sig)
+      tps <- mapM tyParam (sigParams sig)
+      let it = funtype tps (sigReturn sig)
       match it (apply s ty') `wrapError` ih 
       pure ()
+
+tyParam :: Param -> TcM Ty 
+tyParam (Typed _ t) = pure t 
+tyParam (Untyped _) = freshTyVar
 
 findPred :: Name -> [Pred] -> Maybe Pred 
 findPred _ [] = Nothing 

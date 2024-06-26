@@ -9,12 +9,92 @@ import Solcore.Frontend.Syntax
 import Solcore.Frontend.TypeInference.TcMonad
 import Solcore.Frontend.TypeInference.TcSubst
 import Solcore.Frontend.TypeInference.TcUnify
-import Solcore.Primitives.Primitives 
+import Solcore.Primitives.Primitives
 
 -- type inference for statements
 
-tcStmt :: Stmt -> TcM ()
-tcStmt = undefined
+tcStmt :: Stmt -> TcM [Pred]
+tcStmt e@(lhs := rhs) 
+  = do 
+      (ps1, t1) <- tcExp lhs 
+      (ps2, t2) <- tcExp rhs 
+      s <- mgu t1 t2 `wrapError` e
+      pure (apply s (ps1 ++ ps2))
+tcStmt e@(Let n mt me)
+  = do 
+      (psf, tf) <- case (mt, me) of
+                      (Just t, Just e) -> do 
+                        (ps1,t1) <- tcExp e 
+                        s <- mgu t t1 `wrapError` e
+                        pure (apply s ps1, apply s t1)
+                      (Just t, Nothing) -> do 
+                        return ([], t)
+                      (Nothing, Just e) -> tcExp e 
+                      (Nothing, Nothing) -> 
+                        ([],) <$> freshTyVar
+      extEnv n (monotype $ stack tf) 
+      pure psf
+tcStmt (StmtExp e)
+  = fst <$> tcExp e 
+tcStmt m@(Return e)
+  = do 
+      (ps, t) <- tcExp e 
+      t' <- askReturnTy 
+      s <- mgu t t' `wrapError` m
+      pure (apply s ps)
+tcStmt (Match es eqns) 
+  = do 
+      qts <- mapM tcExp es 
+      tcEquations qts eqns
+
+tcEquations :: [([Pred], Ty)] -> Equations -> TcM [Pred]
+tcEquations qts eqns 
+  = concat <$> mapM (tcEquation qts) eqns
+
+tcEquation :: [([Pred], Ty)] -> Equation -> TcM [Pred]
+tcEquation qts (ps, ss) 
+  = do 
+      (pss, lctx) <- tcPats qts ps 
+      pss' <- concat <$> withLocalCtx lctx (mapM tcStmt ss)
+      pure (pss ++ pss')
+
+tcPats :: [([Pred],Ty)] -> [Pat] -> TcM ([Pred], [(Name,Scheme)])
+tcPats qts ps 
+  | length qts /= length ps = wrongPatternNumber qts ps
+  | otherwise = do 
+    (pss,ctxs) <- unzip <$> mapM (\(p,t) -> tcPat p t) 
+                                 (zip qts ps)
+    pure (concat pss, concat ctxs)
+
+
+tcPat :: ([Pred], Ty) -> Pat -> TcM ([Pred], [(Name, Scheme)])
+tcPat (ps, t) p 
+  = do 
+      (t', pctx) <- tiPat p 
+      s <- mgu t t' 
+      let pctx' = map (\ (n,t) -> (n, monotype $ apply s t)) pctx
+      pure (apply s ps, pctx')
+
+tiPat :: Pat -> TcM (Ty, [(Name, Ty)])
+tiPat (PVar n) 
+  = do 
+      t <- freshTyVar
+      pure (t, [(n,t)])
+tiPat (PCon n ps)
+  = do 
+      (ts, lctxs) <- unzip <$> mapM tiPat ps 
+      st <- askCon n
+      (ps' :=> tc) <- freshInst st
+      tr <- freshTyVar
+      s <- mgu tc (funtype ts tr)
+      let lctx' = map (\(n',t') -> (n', apply s t')) (concat lctxs)
+      pure (apply s tr, lctx')
+tiPat PWildcard 
+  = (, []) <$> freshTyVar
+tiPat (PLit l) 
+  = do 
+      t <- tcLit l 
+      pure (t, [])
 
 -- type inference for expressions 
 
@@ -86,3 +166,11 @@ expectedFunction t
   = throwError $ unlines ["Expected function type. Found:"
                          , pretty t 
                          ]
+
+wrongPatternNumber :: [([Pred],Ty)] -> [Pat] -> TcM a
+wrongPatternNumber qts ps 
+  = throwError $ unlines [ "Wrong number of patterns in:"
+                         , unwords (map pretty ps)
+                         , "expected:"
+                         , show (length qts)
+                         , "patterns"]

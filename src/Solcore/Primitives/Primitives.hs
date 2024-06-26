@@ -13,6 +13,12 @@ word = TyCon "Word" []
 string :: Ty 
 string = TyCon "String" []
 
+stack :: Ty -> Ty 
+stack t = TyCon "Stack" [t]
+
+unit :: Ty 
+unit = TyCon "Unit" []
+
 arr :: Name  
 arr = "->"
 

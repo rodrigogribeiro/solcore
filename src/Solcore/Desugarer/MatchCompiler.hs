@@ -115,11 +115,13 @@ instance Compile Instance where
 
 instance Compile FunDef where 
   type Res FunDef = FunDef 
-  compile (FunDef n ret ps bd)
+  compile (FunDef sig bd)
     = do
         bd1 <- replace bd
-        bd' <- local (\ ns -> ns ++ "_" ++ unName n) (compile bd1)
-        return (FunDef n ret ps (concat bd'))
+        let n = sigName sig 
+        bd' <- local (\ ns -> ns ++ "_" ++ unName n) 
+                     (compile bd1)
+        return (FunDef sig (concat bd'))
 
 instance Compile Constructor where 
   type Res Constructor = Constructor 
@@ -212,7 +214,7 @@ generateFunction es d eqn
   = do
       n <- newFunName
       ss <- matchCompilerM es d eqn 
-      let fd = FunDef n Nothing [] ss 
+      let fd = FunDef (Signature n [] [] Nothing) ss 
       tell [fd] 
       return [StmtExp $ generateCall n []] 
 
@@ -398,8 +400,8 @@ instance ReplaceWildcard Stmt where
     = Match <$> replace es <*> replace eqns
 
 instance ReplaceWildcard FunDef where 
-  replace (FunDef n me ps bd)
-    = FunDef n me ps <$> replace bd
+  replace (FunDef sig bd)
+    = FunDef sig <$> replace bd
 
 instance ReplaceWildcard Constructor where 
   replace (Constructor ps bd)

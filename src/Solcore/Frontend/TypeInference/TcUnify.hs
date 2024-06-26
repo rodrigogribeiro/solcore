@@ -5,14 +5,13 @@ import Control.Monad.Except
 import Data.List
 
 import Solcore.Frontend.Syntax
-import Solcore.Frontend.TypeInference.TcMonad
 import Solcore.Frontend.TypeInference.TcSubst
 import Solcore.Frontend.Pretty.SolcorePretty 
 
 
 -- standard unification machinery 
 
-varBind :: Tyvar -> Ty -> TcM Subst 
+varBind :: MonadError String m => Tyvar -> Ty -> m Subst 
 varBind v t
   | v `elem` fv t = infiniteTyErr v t 
   | t == TyVar v = return mempty 
@@ -20,7 +19,7 @@ varBind v t
 
 -- type matching 
 
-match :: Ty -> Ty -> TcM Subst 
+match :: MonadError String m => Ty -> Ty -> m Subst 
 match (TyCon n ts) (TyCon n' ts') 
   | n == n' = go ts ts' 
     where 
@@ -33,7 +32,7 @@ match (TyCon n ts) (TyCon n' ts')
 match (TyVar v) t = pure (v +-> t)
 match t1 t2 = typesNotMatch t1 t2
 
-matchTypes :: [Ty] -> [Ty] -> TcM Subst 
+matchTypes :: MonadError String m => [Ty] -> [Ty] -> m Subst 
 matchTypes [] [] = pure mempty 
 matchTypes (t : ts) (t' : ts') 
   = do 
@@ -44,7 +43,7 @@ matchTypes ts ts' = typesMatchListErr ts ts'
 
 -- most general unifier 
 
-mgu :: Ty -> Ty -> TcM Subst 
+mgu :: MonadError String m => Ty -> Ty -> m Subst 
 mgu (TyCon n ts) (TyCon n' ts') 
   | n == n' && length ts == length ts' 
     = solve (zip ts ts') mempty 
@@ -52,7 +51,7 @@ mgu (TyVar v) t = varBind v t
 mgu t (TyVar v) = varBind v t 
 mgu t1 t2 = typesDoNotUnify t1 t2 
 
-solve :: [(Ty,Ty)] -> Subst -> TcM Subst 
+solve :: MonadError String m => [(Ty,Ty)] -> Subst -> m Subst 
 solve [] s = pure s 
 solve ((t1, t2) : ts) s 
   = do 
@@ -60,10 +59,10 @@ solve ((t1, t2) : ts) s
       s2 <- solve ts s1 
       pure (s2 <> s1)
 
-unifyTypes :: [Ty] -> [Ty] -> TcM Subst 
+unifyTypes :: MonadError String m => [Ty] -> [Ty] -> m Subst 
 unifyTypes ts ts' = solve (zip ts ts') mempty
 
-unifyAllTypes :: [Ty] -> TcM Subst 
+unifyAllTypes :: MonadError String m => [Ty] -> m Subst 
 unifyAllTypes [] = pure mempty 
 unifyAllTypes (t : ts) 
   = do 
@@ -73,7 +72,7 @@ unifyAllTypes (t : ts)
 
 -- composition operator for matching
 
-merge :: Subst -> Subst -> TcM Subst
+merge :: MonadError String m => Subst -> Subst -> m Subst
 merge s1@(Subst p1) s2@(Subst p2) = if agree then pure (Subst (p1 ++ p2))
                                              else throwError "merge fails"
   where
@@ -83,7 +82,7 @@ merge s1@(Subst p1) s2@(Subst p2) = if agree then pure (Subst (p1 ++ p2))
 
 -- basic error messages 
 
-infiniteTyErr :: Tyvar -> Ty -> TcM a 
+infiniteTyErr :: MonadError String m => Tyvar -> Ty -> m a 
 infiniteTyErr v t 
   = throwError $ unwords ["Cannot construct the infinite type:"
                          , pretty v 
@@ -91,7 +90,7 @@ infiniteTyErr v t
                          , pretty t
                          ] 
 
-typesNotMatch :: Ty -> Ty -> TcM a 
+typesNotMatch :: MonadError String m => Ty -> Ty -> m a 
 typesNotMatch t1 t2 
   = throwError $ unwords [ "Types do not match:"
                          , pretty t1 
@@ -99,7 +98,7 @@ typesNotMatch t1 t2
                          , pretty t2
                          ]
 
-typesMatchListErr :: [Ty] -> [Ty] -> TcM a 
+typesMatchListErr :: MonadError String m => [Ty] -> [Ty] -> m a 
 typesMatchListErr ts ts' 
   = throwError (errMsg (zip ts ts'))
     where 
@@ -107,7 +106,7 @@ typesMatchListErr ts ts'
                            concatMap tyList ps  
       tyList (t1, t2) = pretty t1 <> " and " <> pretty t2
 
-typesDoNotUnify :: Ty -> Ty -> TcM a 
+typesDoNotUnify :: MonadError String m => Ty -> Ty -> m a 
 typesDoNotUnify t1 t2 
   = throwError $ unwords [ "Types:"
                          , pretty t1

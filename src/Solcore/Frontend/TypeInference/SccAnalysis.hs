@@ -28,19 +28,25 @@ mkScc (CompUnit imps cs) = CompUnit imps <$> mapM sccContract cs
 sccContract :: Contract -> SCC Contract
 sccContract (Contract n ts ds) 
   = do 
-      (cgraph, posMap, declMap) <- mkCallGraph funs 
+      (cgraph, posMap, declMap) <- mkCallGraph decls 
       newDecls <- rebuildDecls posMap declMap (scc cgraph)
       pure (Contract n ts (newDecls ++ others))
     where 
-      isFun (FunDecl _) = True 
-      isFun _ = False 
-      (funs, others) = partition isFun ds
+      isDecl (FunDecl _) = True 
+      isDecl (InstDecl _) = True 
+      isDecl _ = False 
+      (defs, others) = partition isDecl ds
+      fun :: Decl -> [FunDef]
+      fun (FunDecl fd) = [fd]
+      fun (InstDecl (Instance _ _ _ _ funs)) = funs 
+      fun _ = []
+      decls = concatMap fun defs
 
-rebuildDecls :: Map Int Name -> Map Name Decl -> [[Node]] -> SCC [Decl]
+rebuildDecls :: Map Int Name -> Map Name FunDef -> [[Node]] -> SCC [Decl]
 rebuildDecls posMap declMap 
   = mapM (rebuildDecl posMap declMap)
 
-rebuildDecl :: Map Int Name -> Map Name Decl -> [Node] -> SCC Decl 
+rebuildDecl :: Map Int Name -> Map Name FunDef -> [Node] -> SCC Decl
 rebuildDecl _ _ [] 
   = throwError "Impossible! Empty node list!"
 rebuildDecl pmap dmap [n] 
@@ -48,16 +54,16 @@ rebuildDecl pmap dmap [n]
 rebuildDecl pmap dmap ns 
   = MutualDecl <$> mapM (rebuild pmap dmap) ns
 
-rebuild :: Map Int Name -> Map Name Decl -> Node -> SCC Decl 
+rebuild :: Map Int Name -> Map Name FunDef -> Node -> SCC Decl
 rebuild pmap dmap n 
   = case Map.lookup n pmap of
       Just k -> 
         case Map.lookup k dmap of
-          Just d -> pure d 
+          Just d -> pure (FunDecl d)
           Nothing -> throwError ("Impossible! Undefined decl:" ++ (unName k)) 
       Nothing -> throwError ("Impossible! Undefined decl:" ++ show n)
 
-mkCallGraph :: [Decl] -> SCC (Gr Name (), Map Int Name, Map Name Decl)
+mkCallGraph :: [FunDef] -> SCC (Gr Name (), Map Int Name, Map Name FunDef)
 mkCallGraph ds 
   = do
       nodes' <- zip [0..] <$> mapM nameOf ds 
@@ -69,7 +75,7 @@ mkCallGraph ds
       edges' <- mkEdges table valMap 
       pure (mkGraph nodes' edges', Map.fromList nodes', declMap)
 
-mkDeclMap :: [Decl] -> SCC (Map Name Decl)
+mkDeclMap :: [FunDef] -> SCC (Map Name FunDef)
 mkDeclMap 
   = foldM step Map.empty  
     where 
@@ -89,24 +95,27 @@ mkEdges table pos
                     _      -> err k 
       err v = throwError ("Undefined name:\n" ++ (unName v))
 
-mkCallTable :: [Decl] -> SCC (Map Name [Name])
+mkCallTable :: [FunDef] -> SCC (Map Name [Name])
 mkCallTable ds 
   = do
       emptyTable <- mkEmptyTable ds
       let funs = Map.keys emptyTable 
-      let go (FunDecl fd) ac = Map.insert (funDefName fd) 
-                                          (fv (funDefBody fd) `intersect` funs) 
-                                          ac  
+      let go fd ac = Map.insert (funDefName fd) 
+                                (fv (funDefBody fd) `intersect` funs) 
+                                ac  
       pure $ foldr go emptyTable ds  
 
-mkEmptyTable :: [Decl] -> SCC (Map Name [Name])
+mkEmptyTable :: [FunDef] -> SCC (Map Name [Name])
 mkEmptyTable = foldM step Map.empty 
   where 
     step ac d = (\ n -> Map.insert n [] ac) <$> nameOf d
 
-nameOf :: Decl -> SCC Name  
-nameOf (FunDecl fd) = pure $ funDefName fd 
-nameOf d = throwError ("invalid declaration:" ++ show d)
+nameOf :: FunDef -> SCC Name  
+nameOf fd = pure $ funDefName fd 
+
+funDefName :: FunDef -> Name 
+funDefName (FunDef sig _) 
+  = sigName sig
 
 class FreeVars a where 
   fv :: a -> [Name]

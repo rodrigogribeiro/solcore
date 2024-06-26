@@ -19,6 +19,10 @@ pretty = render . ppr
 class Pretty a where 
   ppr :: a -> Doc  
 
+instance Pretty a => Pretty (Qual a) where 
+  ppr (ps :=> t) 
+    = pprContext True ps <+> ppr t
+
 instance Pretty CompUnit where 
   ppr (CompUnit imps cs)
     = vcat (map ppr imps ++ map ppr cs)
@@ -94,7 +98,7 @@ instance Pretty TySym where
 instance Pretty Class where 
   ppr (Class ps n vs v sigs)
     = text "class " <+> 
-      pprContext ps <+> 
+      pprContext True ps <+> 
       ppr v <+> 
       colon <+> 
       ppr n <+> 
@@ -107,16 +111,17 @@ pprSignatures
   = vcat . map ppr
 
 instance Pretty Signature where 
-  ppr (Signature n ps ty)
+  ppr (Signature n ctx ps ty)
     = text "function" <+> 
-      ppr n           <+> 
+      ppr n           <+>
+      pprContext False ctx  <+> 
       pprParams ps    <+> 
       pprRetTy ty   
 
 instance Pretty Instance where 
   ppr (Instance ctx n tys ty funs)
     = text "instance" <+> 
-      pprContext ctx  <+> 
+      pprContext True ctx  <+> 
       ppr ty          <+>
       colon           <+> 
       ppr n           <+> 
@@ -125,10 +130,10 @@ instance Pretty Instance where
       nest 3 (pprFunBlock funs) $$ 
       rbrace 
 
-pprContext :: [Pred] -> Doc 
-pprContext [] = empty 
-pprContext ps 
-  = parens $ (commaSep $ map ppr ps) <+> text "=>"
+pprContext :: Bool -> [Pred] -> Doc 
+pprContext _ [] = empty 
+pprContext b ps 
+  = parens $ (commaSep $ map ppr ps) <+> if b then text "=>" else empty 
 
 pprFunBlock :: [FunDef] -> Doc 
 pprFunBlock 
@@ -139,11 +144,8 @@ instance Pretty Field where
     = ppr n <+> colon <+> (ppr ty)
 
 instance Pretty FunDef where 
-  ppr (FunDef n ty ps bd)
-    = text "function" <+> 
-      ppr n <+> 
-      pprParams ps <+> 
-      pprRetTy ty <+>
+  ppr (FunDef sig bd)
+    = ppr sig <+>
       lbrace $$ 
       nest 3 (vcat (map ppr bd)) $$ 
       rbrace

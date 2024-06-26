@@ -70,7 +70,8 @@ data Class
 
 data Signature 
   = Signature {
-      sigName :: Name 
+      sigName :: Name
+    , sigContext :: [Pred]
     , sigParams :: [Param]
     , sigReturn :: Maybe Ty 
     } deriving (Eq, Ord, Show)
@@ -97,9 +98,7 @@ data Field
 
 data FunDef 
   = FunDef {
-      funDefName :: Name 
-    , funDefRetTy :: Maybe Ty 
-    , funDefParams :: [Param]
+      funSignature :: Signature 
     , funDefBody :: Body 
     } deriving (Eq, Ord, Show)
 

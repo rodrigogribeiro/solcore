@@ -31,6 +31,7 @@ common common-opts
                       PatternSynonyms
                       TupleSections
                       TypeFamilies
+                      BlockArguments
 
 library
   import: common-opts
@@ -48,7 +49,8 @@ library
       Solcore.Frontend.Syntax.Name 
       Solcore.Frontend.Syntax.Stmt
       Solcore.Frontend.TypeInference.NameSupply
-      Solcore.Frontend.TypeInference.SccAnalysis 
+      Solcore.Frontend.TypeInference.SccAnalysis
+      Solcore.Frontend.TypeInference.TcContract
       Solcore.Frontend.TypeInference.TcMonad
       Solcore.Frontend.TypeInference.TcStmt
       Solcore.Frontend.TypeInference.TcSubst

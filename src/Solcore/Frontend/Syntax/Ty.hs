@@ -29,6 +29,10 @@ retTy (t1 :-> t2) = ret t2
   where 
     ret (ta :-> tb) = ret tb 
     ret t = Just t
+retTy t@(TyCon _ _) = Just t
+
+funtype :: [Ty] -> Ty -> Ty
+funtype ts t = foldr (:->) t ts
 
 -- definition of constraints 
 
@@ -55,4 +59,24 @@ data Scheme
   = Forall [Tyvar] (Qual Ty) 
     deriving (Eq, Ord, Show)
 
+monotype :: Ty -> Scheme 
+monotype t = Forall [] ([] :=> t)
 
+{-
+A measure for types, predicates and constraints for the Patterson Condition 2:
+"The constraint has fewer constructors and variables
+(taken together and counting repetitions) than the head"
+-}
+class HasMeasure a where
+  measure :: a -> Int
+
+instance HasMeasure Ty where
+  measure (TyVar _) = 1
+  measure (TyCon _ ts) = 1 + sum (map measure ts)
+
+instance HasMeasure Pred where
+  measure (InCls _ t as) = sum (map measure as) + measure t
+  measure (t :~: u) = measure t + measure u
+
+instance HasMeasure [Pred] where
+  measure = sum . map measure

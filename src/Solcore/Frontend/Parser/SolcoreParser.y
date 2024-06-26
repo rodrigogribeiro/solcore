@@ -144,7 +144,11 @@ Signatures : Signature ';' Signatures              {$1 : $3}
            | {- empty -}                           {[]}
 
 Signature :: { Signature }
-Signature : 'function' Name '(' ParamList ')' OptRetTy   {Signature $2 $4 $6}
+Signature : 'function' Name ConOpt '(' ParamList ')' OptRetTy   {Signature $2 $3 $5 $7}
+
+ConOpt :: {[Pred]}
+ConOpt : {- empty -}                               {[]}
+       | '[' ConstraintList ']'                    {$2}
 
 ParamList :: { [(Name, Ty)] }
 ParamList : Param                                  {[$1]}
@@ -177,7 +181,7 @@ InstBody : '{' Functions '}'                       {$2}
 -- Function declaration 
 
 Function :: { FunDef }
-Function : 'function' Name '(' ParamList ')' OptRetTy Body {FunDef $2 $6 $4 $7}
+Function : Signature Body {FunDef $1 $2}
 
 OptRetTy :: { Maybe Ty }
 OptRetTy : '->' Type                               {Just $2}

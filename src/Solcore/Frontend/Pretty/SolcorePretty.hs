@@ -150,9 +150,8 @@ instance Pretty FunDef where
       nest 3 (vcat (map ppr bd)) $$ 
       rbrace
 
-pprRetTy :: Maybe Ty -> Doc  
-pprRetTy (Just t) = text "->" <+> ppr t
-pprRetTy _        = empty 
+pprRetTy :: Ty -> Doc  
+pprRetTy t = text "->" <+> ppr t
 
 pprParams :: [Param] -> Doc  
 pprParams = parens . commaSep . map pprParam

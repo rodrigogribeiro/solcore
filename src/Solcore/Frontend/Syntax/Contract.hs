@@ -73,7 +73,7 @@ data Signature
       sigName :: Name
     , sigContext :: [Pred]
     , sigParams :: [Param]
-    , sigReturn :: Maybe Ty 
+    , sigReturn :: Ty 
     } deriving (Eq, Ord, Show)
 
 data Instance 

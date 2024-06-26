@@ -12,43 +12,13 @@ import qualified Data.Map as Map
 import Solcore.Frontend.Pretty.SolcorePretty
 import Solcore.Frontend.Syntax
 import Solcore.Frontend.TypeInference.NameSupply
+import Solcore.Frontend.TypeInference.TcEnv
 import Solcore.Frontend.TypeInference.TcSubst
 import Solcore.Frontend.TypeInference.TcUnify
 import Solcore.Primitives.Primitives
 
 
--- definition of type inference monad infrastrature 
-
-type Env = Map Name Scheme
-type DataEnv = Map Name Scheme
-type TypeEnv = Map Name TypeInfo 
-type FieldEnv = Map Name Scheme 
-type FunctionEnv = Map Name Scheme 
-type Inst = Qual Pred 
-type InstEnv = Map Name [Inst] 
-
-data TypeInfo 
-  = TypeInfo {
-      fieldEnv :: FieldEnv   
-    , funEnv :: FunctionEnv
-    }
-    deriving (Eq, Show, Ord)
-
-data TcEnv 
-  = TcEnv {
-      ctx :: Env               -- Variable environment
-    , constructors :: DataEnv  -- ADT constructor environment
-    , typeEnv :: TypeEnv       -- Type environment
-    , instEnv :: InstEnv       -- Instance Environment
-    , contract :: Name         -- current contract name 
-                               -- used to type check calls.
-    , returnType :: Ty         -- current function return type.
-    , subst :: Subst           -- Current substitution
-    , nameSupply :: NameSupply -- Fresh name supply
-    , logs :: [String]         -- Logging
-    , enableLog :: Bool        -- Enable logging?
-    , enableCoverage :: Bool   -- Enable coverage checking?
-    }
+-- definition of type inference monad infrastructure 
 
 type TcM a = StateT TcEnv (ExceptT String Identity) a 
 
@@ -220,97 +190,9 @@ addInstance n inst
       ctx{instEnv = Map.insertWith (++) n [inst] (instEnv ctx)})  
       
 
--- checking class definitions and adding them to environment 
-
-checkClasses :: [Class] -> TcM ()
-checkClasses = mapM_ checkClass 
-
-checkClass :: Class -> TcM ()
-checkClass (Class ps n vs v sigs) 
-  = mapM_ checkSignature sigs 
-    where
-      checkSignature sig@(Signature f ctx ps mt)
-        | null ctx && v `elem` fv (sigType ps mt) 
-          = addClassMethod (InCls n (TyVar v) (TyVar <$> vs))
-                           sig 
-        | otherwise = 
-          throwError $ 
-              "invalid class declaration: " ++ (unName n)
-
-addClassMethod :: Pred -> Signature -> TcM ()
-addClassMethod p@(InCls _ _ _) (Signature f ctx ps mt) 
-  = extFunEnv f (Forall vs ([p] :=> ty))
-    where 
-      ty = sigType ps mt 
-      vs = fv ty 
-addClassMethod p@(_ :~: _) (Signature n _ _ _) 
-  = throwError $ unlines [
-                    "Invalid constraint:"
-                  , pretty p 
-                  , "in class method:"
-                  , unName n
-                  ]
-
-sigType :: [Param] -> Maybe Ty -> Ty 
-sigType ps Nothing = funtype (map snd ps) unit 
-sigType ps (Just t) = funtype (map snd ps) t
-
--- checking instances and adding them in the environment
-
-checkInstances :: [Instance] -> TcM ()
-checkInstances = mapM_ checkInstance 
-
-checkInstance :: Instance -> TcM ()
-checkInstance (Instance ctx n ts t funs)
-  = do 
-      let ipred = InCls n t ts
-      insts <- askInstEnv n `wrapError` ipred
-      checkOverlap ipred insts
-      coverage <- askCoverage
-      when coverage (checkCoverage n ts t `wrapError` ipred)
-      checkMeasure ctx ipred `wrapError` ipred
-      mapM_ (checkMethod ipred) funs 
-      return ()
-
-checkOverlap :: Pred -> [Inst] -> TcM ()
-checkOverlap _ [] = pure ()
-checkOverlap p@(InCls _ t _) (i:is) 
-  = do 
-        i' <- renameVars (fv t) i
-        case i' of 
-          (ps :=> (InCls _ t' _)) -> 
-            case mgu t t' of
-              Right _ -> throwError (unlines ["instance:", pretty p, "with:", pretty i'])
-              Left _ -> checkOverlap p is
-        return ()
-
-checkCoverage :: Name -> [Ty] -> Ty -> TcM ()
-checkCoverage cn ts t 
-  = do 
-      let strongTvs = fv t 
-          weakTvs = fv ts 
-          undetermined = weakTvs \\ strongTvs
-      unless (null undetermined) $ 
-          throwError (unlines [
-            "Coverage condition fails for class:"
-          , unName cn 
-          , "- the type:"
-          , pretty t 
-          , "does not determine:"
-          , intercalate ", " (map pretty undetermined)
-          ])
-
-checkMethod :: Pred -> FunDef -> TcM () 
-checkMethod p fd = undefined 
-
--- checking Patterson conditions 
-
-checkMeasure :: [Pred] -> Pred -> TcM ()
-checkMeasure ps c 
-  = if measure ps < measure c then return () 
-    else throwError $ unlines [ "Instance "
-                              , pretty c
-                              , "does not satisfy the Patterson conditions."]
+maybeToTcM :: String -> Maybe a -> TcM a 
+maybeToTcM s Nothing = throwError s 
+maybetoTcM _ (Just x) = pure x
 
 -- checking coverage pragma 
 

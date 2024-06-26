@@ -13,6 +13,7 @@ import Solcore.Frontend.Pretty.SolcorePretty
 import Solcore.Frontend.Syntax.Contract
 import Solcore.Frontend.Syntax.Stmt 
 import Solcore.Frontend.Syntax.Name
+import Solcore.Primitives.Primitives
 
 import Text.PrettyPrint.HughesPJ (render, hsep)
 
@@ -214,7 +215,7 @@ generateFunction es d eqn
   = do
       n <- newFunName
       ss <- matchCompilerM es d eqn 
-      let fd = FunDef (Signature n [] [] Nothing) ss 
+      let fd = FunDef (Signature n [] [] unit) ss 
       tell [fd] 
       return [StmtExp $ generateCall n []] 
 

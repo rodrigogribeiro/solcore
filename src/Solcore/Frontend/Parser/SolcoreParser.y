@@ -6,6 +6,7 @@ import Solcore.Frontend.Syntax.Contract
 import Solcore.Frontend.Syntax.Name
 import Solcore.Frontend.Syntax.Stmt
 import Solcore.Frontend.Syntax.Ty
+import Solcore.Primitives.Primitives
 }
 
 
@@ -183,9 +184,9 @@ InstBody : '{' Functions '}'                       {$2}
 Function :: { FunDef }
 Function : Signature Body {FunDef $1 $2}
 
-OptRetTy :: { Maybe Ty }
-OptRetTy : '->' Type                               {Just $2}
-         | {- empty -}                             {Nothing}
+OptRetTy :: { Ty }
+OptRetTy : '->' Type                               {$2}
+         | {- empty -}                             {unit}
 
 -- Contract constructor 
 

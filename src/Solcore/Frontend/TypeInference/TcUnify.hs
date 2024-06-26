@@ -41,6 +41,12 @@ matchTypes (t : ts) (t' : ts')
       merge s1 s2 
 matchTypes ts ts' = typesMatchListErr ts ts'
 
+matchPred :: MonadError String m => Pred -> Pred -> m Subst 
+matchPred (InCls n t ts) (InCls n' t' ts') 
+  | n == n' = matchTypes (t : ts) (t' : ts')
+  | otherwise = throwError "Classes differ!"
+
+
 -- most general unifier 
 
 mgu :: MonadError String m => Ty -> Ty -> m Subst 

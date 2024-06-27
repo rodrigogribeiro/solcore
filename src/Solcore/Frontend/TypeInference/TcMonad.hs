@@ -36,6 +36,10 @@ freshVar
 freshTyVar :: TcM Ty 
 freshTyVar = TyVar <$> freshVar
 
+getEnvFreeVars :: TcM [Tyvar]
+getEnvFreeVars 
+  = concat <$> gets (Map.map fv . ctx)
+
 -- type instantiation 
 
 freshInst :: Scheme -> TcM (Qual Ty)
@@ -47,6 +51,20 @@ renameVars vs t
   = do 
       s <- mapM (\ v -> (v,) <$> freshTyVar) vs 
       pure $ apply (Subst s) t
+
+-- substitution 
+
+withCurrentSubst :: HasType a => a -> TcM a
+withCurrentSubst t = do
+  s <- gets subst
+  pure (apply s t)
+
+getSubst :: TcM Subst 
+getSubst = gets subst
+
+extSubst :: Subst -> TcM ()
+extSubst s = modify ext where
+    ext st = st{ subst = s <> subst st }
 
 -- current contract manipulation 
 
@@ -184,6 +202,9 @@ askInstEnv :: Name -> TcM [Inst]
 askInstEnv n 
   = maybe [] id . Map.lookup n <$> gets instEnv
 
+getInstEnv :: TcM InstEnv 
+getInstEnv = gets instEnv
+
 addInstance :: Name -> Inst -> TcM ()
 addInstance n inst 
   = modify (\ ctx -> 
@@ -202,6 +223,11 @@ askCoverage = gets enableCoverage
 setCoverage :: Bool -> TcM ()
 setCoverage b 
   = modify (\env -> env{ enableCoverage = b})
+
+-- recursion depth 
+
+askMaxRecursionDepth :: TcM Int 
+askMaxRecursionDepth = gets maxRecursionDepth 
 
 -- logging utilities
 

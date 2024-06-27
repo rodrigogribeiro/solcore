@@ -35,6 +35,10 @@ class HasType a where
   apply :: Subst -> a -> a 
   fv :: a -> [Tyvar]
 
+instance (HasType a, HasType b) => HasType (a,b) where 
+  apply s (x,y) = (apply s x, apply s y)
+  fv (x,y) = fv x `union` fv y
+
 instance HasType a => HasType [a] where 
   apply s = map (apply s)
   fv = foldr (union . fv) []

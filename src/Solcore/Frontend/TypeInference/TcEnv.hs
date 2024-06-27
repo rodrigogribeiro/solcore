@@ -43,6 +43,8 @@ data TcEnv
     , logs :: [String]         -- Logging
     , enableLog :: Bool        -- Enable logging?
     , enableCoverage :: Bool   -- Enable coverage checking?
+    , maxRecursionDepth :: Int -- max recursion depth in 
+                               -- context reduction
     }
 
 

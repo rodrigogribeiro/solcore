@@ -135,6 +135,9 @@ pprContext _ [] = empty
 pprContext b ps 
   = parens $ (commaSep $ map ppr ps) <+> if b then text "=>" else empty 
 
+instance Pretty [Pred] where 
+  ppr = hsep . map ppr 
+
 pprFunBlock :: [FunDef] -> Doc 
 pprFunBlock 
   = vcat . map ppr

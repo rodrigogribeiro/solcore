@@ -33,12 +33,12 @@ sccContract (Contract n ts ds)
       pure (Contract n ts (newDecls ++ others))
     where 
       isDecl (FunDecl _) = True 
-      isDecl (InstDecl _) = True 
+      -- isDecl (InstDecl _) = True 
       isDecl _ = False 
       (defs, others) = partition isDecl ds
       fun :: Decl -> [FunDef]
       fun (FunDecl fd) = [fd]
-      fun (InstDecl (Instance _ _ _ _ funs)) = funs 
+      -- fun (InstDecl (Instance _ _ _ _ funs)) = funs 
       fun _ = []
       decls = concatMap fun defs
 

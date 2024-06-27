@@ -4,6 +4,7 @@ import Control.Monad
 import Control.Monad.Except
 
 import Data.List
+import qualified Data.Map as Map
 
 import Solcore.Frontend.Pretty.SolcorePretty
 import Solcore.Frontend.Syntax
@@ -26,6 +27,8 @@ tcDecl (MutualDecl ds) = tcBindGroup ds
 tcDecl (ConstrDecl cd) = tcConstructor cd 
 tcDecl _ = return ()
 
+-- type checking fields
+
 tcField :: Field -> TcM ()
 tcField d@(Field n t (Just e)) 
   = do
@@ -36,10 +39,128 @@ tcField d@(Field n t (Just e))
 tcField (Field _ _ _) = return ()
 
 tcInstance :: Instance -> TcM ()
-tcInstance = undefined 
+tcInstance (Instance ctx n ts t funs) 
+  = undefined 
 
 tcBindGroup :: [Decl] -> TcM ()
-tcBindGroup = undefined 
+tcBindGroup binds 
+  = do 
+      funs <- mapM scanFun binds 
+      qts <- mapM tcFunDef funs
+      qts' <- withCurrentSubst qts 
+      schs <- mapM generalize qts'
+      let names = map (sigName . funSignature) funs 
+          results = zip names schs 
+      mapM_ (uncurry extFunEnv) results 
+
+tcFunDef :: FunDef -> TcM ([Pred], Ty)
+tcFunDef (FunDef sig bd) 
+  = undefined 
+
+scanFun :: Decl -> TcM FunDef 
+scanFun (FunDecl (FunDef sig bd)) 
+  = flip FunDef bd <$> fillSignature sig 
+    where 
+      f (Typed n t) = pure $ Typed n t
+      f (Untyped n) = Typed n <$> freshTyVar
+      fillSignature (Signature ctx n ps t)
+        = do 
+            ps' <- mapM f ps 
+            pure (Signature ctx n ps' t)
+scanFun d = throwError $ unlines [ "Invalid declaration in bind-group:"
+                                 , pretty d
+                                 ]
+
+-- type generalization 
+
+generalize :: ([Pred], Ty) -> TcM Scheme 
+generalize (ps,t) 
+  = do 
+      envVars <- getEnvFreeVars 
+      (ps1,t1) <- withCurrentSubst (ps,t)
+      ps2 <- reduceContext ps1 
+      t2 <- withCurrentSubst t1 
+      let vs = fv (ps2,t2)
+          sch = Forall (vs \\ envVars) (ps2 :=> t2)
+      return sch
+
+-- context reduction 
+
+reduceContext :: [Pred] -> TcM [Pred]
+reduceContext preds 
+  = do 
+      depth <- askMaxRecursionDepth 
+      unless (null preds) $ info ["> reduce context ", pretty preds]
+      ps1 <- toHnfs depth preds `wrapError` preds
+      ps2 <- withCurrentSubst ps1 
+      unless (null preds) $ info ["> reduced context ", pretty (nub ps2)]
+      pure (nub ps2)
+
+toHnfs :: Int -> [Pred] -> TcM [Pred]
+toHnfs depth ps 
+  = do 
+      s <- getSubst 
+      ps' <- simplifyEqualities ps 
+      ps2 <- withCurrentSubst ps'
+      toHnfs' depth ps2 
+
+simplifyEqualities :: [Pred] -> TcM [Pred]
+simplifyEqualities ps = go [] ps where
+    go rs [] = return rs
+    go rs ((t :~: u) : ps) = do
+      phi <- mgu t u
+      extSubst phi
+      ps' <- withCurrentSubst ps
+      rs' <- withCurrentSubst rs
+      go rs' ps'
+    go rs (p:ps) = go (p:rs) ps
+
+toHnfs' :: Int -> [Pred] -> TcM [Pred]
+toHnfs' _ [] = return []
+toHnfs' 0 ps = throwError("Max context reduction depth exceeded")
+toHnfs' d preds@(p:ps) = do
+  let d' = d - 1
+  rs1 <- toHnf d' p
+  ps' <- withCurrentSubst ps   -- important, toHnf may have extended the subst
+  rs2 <- toHnfs' d' ps'
+  return (rs1 ++ rs2)
+
+toHnf :: Int -> Pred -> TcM [Pred]
+toHnf _ (t :~: u) = do
+  subst1 <- mgu t u
+  extSubst subst1
+  return []
+toHnf depth pred@(InCls n _ _)
+  | inHnf pred = return [pred]
+  | otherwise = do
+      ce <- getInstEnv
+      is <- askInstEnv n
+      case byInstM ce pred of
+        Nothing -> throwError ("no instance of " ++ pretty pred
+                  ++"\nKnown instances:\n"++ (unlines $ map pretty is))
+        Just (preds, subst') -> do
+            extSubst subst'
+            toHnfs (depth - 1) preds
+
+inHnf :: Pred -> Bool
+inHnf (InCls c t args) = hnf t where
+  hnf (TyVar _) = True
+  hnf (TyCon _ _) = False
+inHnf (_ :~: _) = False
+
+byInstM :: InstEnv -> Pred -> Maybe ([Pred], Subst)
+byInstM ce p@(InCls i t as) 
+  = msum [tryInst it | it <- insts ce i] 
+    where
+      insts m n = maybe [] id (Map.lookup n m)
+      tryInst :: Qual Pred -> Maybe ([Pred], Subst)
+      tryInst c@(ps :=> h) =
+          case matchPred h p of
+            Left _ -> Nothing
+            Right u -> let tvs = fv h
+                       in  Just (map (apply u) ps, restrict u tvs)
+
+-- type checking contract constructors
 
 tcConstructor :: Constructor -> TcM ()
 tcConstructor (Constructor ps bd) 
@@ -68,7 +189,7 @@ checkClass (Class ps n vs v sigs)
                            sig 
 
 addClassMethod :: Pred -> Signature -> TcM ()
-addClassMethod p@(InCls _ _ _) (Signature f ctx ps t) 
+addClassMethod p@(InCls _ _ _) (Signature f _ ps t) 
   = do
       tps <- mapM tyParam ps  
       let ty = funtype tps t
@@ -81,6 +202,13 @@ addClassMethod p@(_ :~: _) (Signature n _ _ _)
                   , "in class method:"
                   , unName n
                   ]
+
+schemeFromSignature :: Signature -> TcM Scheme
+schemeFromSignature (Signature f ctx ps t)
+  = do 
+      tps <- mapM tyParam ps 
+      let ty = funtype tps t
+      pure (Forall (fv ty) (ctx :=> ty))
 
 -- checking instances and adding them in the environment
 
@@ -138,13 +266,15 @@ checkCoverage cn ts t
 checkMethod :: Pred -> FunDef -> TcM () 
 checkMethod ih@(InCls n t ts) (FunDef sig bd) 
   = do
-      cn <- askCurrentContract 
+      cn <- askCurrentContract
+      -- getting current method signature in class 
       st@(Forall _ (qs :=> _)) <- askFun cn (sigName sig)
       p <- maybeToTcM (unwords [ "Constraint for"
                                , unName n
                                , "not found in type of"
                                , unName $ sigName sig])
                       (findPred n qs)
+      -- matching substitution of instance head and class predicate
       s <- liftEither (matchPred p ih) `wrapError` ih
       (qs' :=> ty') <- freshInst st 
       tps <- mapM tyParam (sigParams sig)
@@ -179,5 +309,3 @@ checkMeasure ps c
     else throwError $ unlines [ "Instance "
                               , pretty c
                               , "does not satisfy the Patterson conditions."]
-
-

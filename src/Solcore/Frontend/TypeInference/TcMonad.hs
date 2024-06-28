@@ -70,19 +70,29 @@ extSubst s = modify ext where
 
 setCurrentContract :: Name -> TcM ()
 setCurrentContract n 
-  = modify (\ ctx -> ctx{contract = n})
+  = modify (\ ctx -> ctx{contract = Just n
+                        , typeEnv = Map.insert n emptyTypeInfo Map.empty })
 
 askCurrentContract :: TcM Name 
-askCurrentContract = gets contract
+askCurrentContract 
+  = do 
+      n <- gets contract
+      maybe (throwError "Impossible! Lacking current contract name!")
+            pure  
+            n 
 
 -- current function return type 
 
 setReturnTy :: Ty -> TcM ()
 setReturnTy t 
-  = modify (\ ctx -> ctx {returnType = t})
+  = modify (\ ctx -> ctx {returnType = Just t})
 
 askReturnTy :: TcM Ty 
-askReturnTy = gets returnType
+askReturnTy = do 
+  t <- gets returnType
+  maybe (throwError "Impossible! Lacking return type!")
+        pure 
+        t
 
 -- extending the environment with a new variable 
 
@@ -263,7 +273,9 @@ undefinedName n
 
 undefinedType :: Name -> TcM a 
 undefinedType n 
-  = throwError $ unwords ["Undefined type:", pretty n]
+  = do
+      s <- (unlines . reverse) <$> gets logs 
+      throwError $ unwords ["Undefined type:", pretty n, "\n", s]
 
 undefinedField :: Name -> Name -> TcM a 
 undefinedField n n'

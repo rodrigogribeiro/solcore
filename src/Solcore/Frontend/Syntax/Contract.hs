@@ -47,7 +47,6 @@ data Constructor
       constrParams :: [Param]
     , constrBody :: Body 
     } deriving (Eq, Ord, Show)
-
 -- definition of a synonym 
 
 data TySym 
@@ -73,7 +72,7 @@ data Signature
       sigName :: Name
     , sigContext :: [Pred]
     , sigParams :: [Param]
-    , sigReturn :: Ty 
+    , sigReturn :: Maybe Ty 
     } deriving (Eq, Ord, Show)
 
 data Instance 

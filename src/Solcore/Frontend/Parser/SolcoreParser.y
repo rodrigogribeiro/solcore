@@ -90,7 +90,7 @@ Decl : FieldDef                                    {FieldDecl $1}
 -- fields 
 
 FieldDef :: { Field }
-FieldDef : Name ':' Type                           {Field $1 $3 Nothing}
+FieldDef : Name ':' Type InitOpt ';'               {Field $1 $3 $4}
 
 -- algebraic data types 
 
@@ -185,9 +185,9 @@ InstBody : '{' Functions '}'                       {$2}
 Function :: { FunDef }
 Function : Signature Body {FunDef $1 $2}
 
-OptRetTy :: { Ty }
-OptRetTy : '->' Type                               {$2}
-         | {- empty -}                             {unit}
+OptRetTy :: { Maybe Ty }
+OptRetTy : '->' Type                               {Just $2}
+         | {- empty -}                             {Nothing}
 
 -- Contract constructor 
 

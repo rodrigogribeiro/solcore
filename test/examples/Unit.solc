@@ -1,4 +1,0 @@
-contract Unit {
-  data Unit = Unit   
-
-}

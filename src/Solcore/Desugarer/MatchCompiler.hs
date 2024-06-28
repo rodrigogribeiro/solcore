@@ -215,7 +215,7 @@ generateFunction es d eqn
   = do
       n <- newFunName
       ss <- matchCompilerM es d eqn 
-      let fd = FunDef (Signature n [] [] unit) ss 
+      let fd = FunDef (Signature n [] [] Nothing) ss 
       tell [fd] 
       return [StmtExp $ generateCall n []] 
 

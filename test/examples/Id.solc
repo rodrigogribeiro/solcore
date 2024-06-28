@@ -1,0 +1,5 @@
+contract Identity {
+  function id(x) {
+    return x ; 
+  }
+}

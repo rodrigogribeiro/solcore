@@ -16,6 +16,78 @@ import Solcore.Frontend.TypeInference.TcSubst
 import Solcore.Frontend.TypeInference.TcUnify
 import Solcore.Primitives.Primitives
 
+-- top level type inference function 
+
+typeInfer :: CompUnit -> Either String TcEnv 
+typeInfer c 
+  = case runTcM (tcCompUnit c) initTcEnv of 
+      Left err -> Left err 
+      Right (_, env) -> Right env
+
+-- type inference for a compilation unit 
+
+tcCompUnit :: CompUnit -> TcM ()
+tcCompUnit (CompUnit imps cs)
+  = do 
+      loadImports imps 
+      mapM_ tcContract cs 
+
+-- FIXME load import information
+
+loadImports :: [Import] -> TcM ()
+loadImports _ = return () 
+
+-- type inference for contracts 
+
+tcContract :: Contract -> TcM () 
+tcContract c@(Contract n vs decls) 
+  = withLocalEnv do
+      info ["Start type inference for:", pretty n]
+      -- initializeEnv c
+      setCurrentContract n 
+      mapM_ tcDecl decls 
+
+-- initializing context for a contract
+
+initializeEnv :: Contract -> TcM ()
+initializeEnv (Contract n vs decls)
+  = do 
+      setCurrentContract n 
+      mapM_ checkDecl decls 
+
+checkDecl :: Decl -> TcM ()
+checkDecl (DataDecl dt) 
+  = checkDataType dt 
+checkDecl (ClassDecl c)
+  = checkClass c 
+checkDecl (InstDecl i)
+  = checkInstance i 
+checkDecl (FunDecl (FunDef sig _))
+  = extSignature sig
+checkDecl _ = return ()
+
+extSignature :: Signature -> TcM ()
+extSignature (Signature n ctx ps t)
+  = do
+      argTys <- mapM tyParam ps
+      t' <- maybe freshTyVar pure t
+      let 
+        ty = funtype argTys t' 
+        vs = fv (ctx :=> ty)
+      sch <- generalize (ctx, ty) 
+      extFunEnv n sch
+
+-- including contructors on environment
+
+checkDataType :: DataTy -> TcM ()
+checkDataType (DataTy n vs constrs) 
+  = do
+      vals' <- mapM (\ (n, ty) -> (n,) <$> generalize ([], ty)) vals
+      mapM_ (uncurry extEnv) vals'
+    where 
+      tc = TyCon n (TyVar <$> vs) 
+      vals = map constrBind constrs        
+      constrBind c = (constrName c, (funtype (constrTy c) tc))
 
 -- type inference for declarations
 
@@ -35,27 +107,63 @@ tcField d@(Field n t (Just e))
       -- FIXME: Should we return the constraints?
       (ps', t') <- tcExp e 
       s <- mgu t t' `wrapError` d 
+      extEnv n (monotype t)
       return () 
-tcField (Field _ _ _) = return ()
+tcField (Field n t _) = extEnv n (monotype t)
+
+-- type checking instance body 
 
 tcInstance :: Instance -> TcM ()
-tcInstance (Instance ctx n ts t funs) 
-  = undefined 
+tcInstance (Instance _ _ _ _ funs) 
+  = mapM_ tcFunDef funs
+
+-- type checking binding groups
 
 tcBindGroup :: [Decl] -> TcM ()
 tcBindGroup binds 
-  = do 
+  = do
+      info ["Starting typing bindgroup"]
       funs <- mapM scanFun binds 
       qts <- mapM tcFunDef funs
       qts' <- withCurrentSubst qts 
       schs <- mapM generalize qts'
+      info ["Generalize scheme:", unlines $ map pretty schs]
       let names = map (sigName . funSignature) funs 
           results = zip names schs 
-      mapM_ (uncurry extFunEnv) results 
+      mapM_ (uncurry extFunEnv) results
+      info ["Finish typing bindgroup"]
+
+-- type checking a single bind
 
 tcFunDef :: FunDef -> TcM ([Pred], Ty)
 tcFunDef (FunDef sig bd) 
-  = undefined 
+  = withLocalEnv do
+      info ["Type inference for function:", pretty (sigName sig)]
+      t' <- maybe freshTyVar pure (sigReturn sig)
+      setReturnTy t'
+      ts <- mapM addArg (sigParams sig)
+      mapM_ tcStmt bd
+      info ["Type inference for body."]
+      sch <- schemeFromSignature sig 
+      (ps :=> t) <- freshInst sch
+      info ["Resulting type for:", pretty $ sigName sig, " is ", pretty t]
+      s <- getSubst
+      pure (apply s (ps, t))
+
+addArg :: Param -> TcM Ty 
+addArg (Typed n t) 
+  = do 
+      extEnv n (monotype t)
+      pure t 
+addArg (Untyped n) 
+  = do 
+      t <- freshTyVar
+      extEnv n (monotype t)
+      pure t
+
+tcParam :: Param -> TcM Param
+tcParam p@(Typed _ _) = pure p
+tcParam (Untyped n) = Typed n <$> freshTyVar
 
 scanFun :: Decl -> TcM FunDef 
 scanFun (FunDecl (FunDef sig bd)) 
@@ -182,8 +290,9 @@ checkClass (Class ps n vs v sigs)
     where
       checkSignature sig@(Signature f ctx ps mt)
         = do 
-            pst <- mapM tyParam ps 
-            unless (null ctx && v `elem` fv (funtype pst mt))
+            pst <- mapM tyParam ps
+            t' <- maybe freshTyVar pure mt 
+            unless (null ctx && v `elem` fv (funtype pst t'))
                    (throwError $ "invalid class declaration: " ++ unName n)
             addClassMethod (InCls n (TyVar v) (TyVar <$> vs))
                            sig 
@@ -191,8 +300,9 @@ checkClass (Class ps n vs v sigs)
 addClassMethod :: Pred -> Signature -> TcM ()
 addClassMethod p@(InCls _ _ _) (Signature f _ ps t) 
   = do
-      tps <- mapM tyParam ps  
-      let ty = funtype tps t
+      tps <- mapM tyParam ps
+      t' <- maybe freshTyVar pure t
+      let ty = funtype tps t'
           vs = fv ty
       extFunEnv f (Forall vs ([p] :=> ty))
 addClassMethod p@(_ :~: _) (Signature n _ _ _) 
@@ -206,8 +316,9 @@ addClassMethod p@(_ :~: _) (Signature n _ _ _)
 schemeFromSignature :: Signature -> TcM Scheme
 schemeFromSignature (Signature f ctx ps t)
   = do 
-      tps <- mapM tyParam ps 
-      let ty = funtype tps t
+      tps <- mapM tyParam ps
+      t' <- maybe freshTyVar pure t 
+      let ty = funtype tps t'
       pure (Forall (fv ty) (ctx :=> ty))
 
 -- checking instances and adding them in the environment
@@ -228,7 +339,7 @@ checkInstance (Instance ctx n ts t funs)
       checkMeasure ctx ipred `wrapError` ipred
       -- checking instance methods
       mapM_ (checkMethod ipred) funs
-      let ninst = ctx :=> InCls n t ts 
+      let ninst = anfInstance $ ctx :=> InCls n t ts 
       -- add to the environment 
       addInstance n ninst 
 
@@ -278,7 +389,8 @@ checkMethod ih@(InCls n t ts) (FunDef sig bd)
       s <- liftEither (matchPred p ih) `wrapError` ih
       (qs' :=> ty') <- freshInst st 
       tps <- mapM tyParam (sigParams sig)
-      let it = funtype tps (sigReturn sig)
+      tr <- maybe freshTyVar pure (sigReturn sig)
+      let it = funtype tps tr
       match it (apply s ty') `wrapError` ih 
       pure ()
 

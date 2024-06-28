@@ -1,11 +1,15 @@
 module Solcore.Pipeline.SolcorePipeline where
 
+import Control.Monad
+
 import Options.Applicative 
 
 import Solcore.Desugarer.MatchCompiler 
 import Solcore.Frontend.Lexer.SolcoreLexer
 import Solcore.Frontend.Parser.SolcoreParser
-import Solcore.Frontend.Pretty.SolcorePretty 
+import Solcore.Frontend.Pretty.SolcorePretty
+import Solcore.Frontend.TypeInference.TcContract
+import Solcore.Frontend.TypeInference.TcEnv
 
 -- main compiler driver function 
 
@@ -15,12 +19,16 @@ pipeline = do
   content <- readFile (fileName opts)
   case runAlex content parser of 
     Left err -> putStrLn err 
-    Right ast -> 
-      do 
-          res <- matchCompiler ast 
-          case res of 
-            Right r -> putStrLn $ pretty r 
-            Left err -> putStrLn err 
+    Right ast ->
+      case typeInfer ast of
+        Left err -> putStrLn err 
+        Right env -> 
+          do 
+            when (enableLog env) (mapM_ putStrLn (logs env))
+            res <- matchCompiler ast 
+            case res of 
+              Right r -> putStrLn $ pretty r 
+              Left err -> putStrLn err 
 
 -- parsing command line arguments 
 

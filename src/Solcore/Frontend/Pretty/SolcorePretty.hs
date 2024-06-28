@@ -143,8 +143,8 @@ pprFunBlock
   = vcat . map ppr
 
 instance Pretty Field where 
-  ppr (Field n ty _)
-    = ppr n <+> colon <+> (ppr ty)
+  ppr (Field n ty e)
+    = ppr n <+> colon <+> (ppr ty) <+> pprInitOpt e
 
 instance Pretty FunDef where 
   ppr (FunDef sig bd)
@@ -153,8 +153,9 @@ instance Pretty FunDef where
       nest 3 (vcat (map ppr bd)) $$ 
       rbrace
 
-pprRetTy :: Ty -> Doc  
-pprRetTy t = text "->" <+> ppr t
+pprRetTy :: Maybe Ty -> Doc  
+pprRetTy (Just t) = text "->" <+> ppr t
+pprRetTy Nothing = empty 
 
 pprParams :: [Param] -> Doc  
 pprParams = parens . commaSep . map ppr
@@ -231,8 +232,20 @@ instance Pretty Pred where
   ppr (t1 :~: t2) = 
     ppr t1 <+> text "~" <+> ppr t2
 
+instance Pretty Scheme where
+  ppr (Forall [] (ctx :=> t))
+    = pprContext True ctx <+> ppr t
+  ppr (Forall vs (ctx :=> t)) 
+    = text "forall"       <+> 
+      hsep (map ppr vs)   <+>
+      text "."            <+> 
+      pprContext True ctx <+>
+      ppr t 
+
 instance Pretty Ty where 
-  ppr (TyVar v) = ppr v 
+  ppr (TyVar v) = ppr v
+  ppr (TyCon (Name "->") ts) 
+    = hsep $ punctuate (text " ->") (map ppr ts)
   ppr (TyCon n ts)
     = ppr n <> (pprTyParams ts)
 

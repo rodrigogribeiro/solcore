@@ -29,15 +29,18 @@ data TypeInfo
     }
     deriving (Eq, Show, Ord)
 
+emptyTypeInfo :: TypeInfo 
+emptyTypeInfo = TypeInfo Map.empty Map.empty 
+
 data TcEnv 
   = TcEnv {
       ctx :: Env               -- Variable environment
     , constructors :: DataEnv  -- ADT constructor environment
     , typeEnv :: TypeEnv       -- Type environment
     , instEnv :: InstEnv       -- Instance Environment
-    , contract :: Name         -- current contract name 
+    , contract :: Maybe Name   -- current contract name 
                                -- used to type check calls.
-    , returnType :: Ty         -- current function return type.
+    , returnType :: Maybe Ty   -- current function return type.
     , subst :: Subst           -- Current substitution
     , nameSupply :: NameSupply -- Fresh name supply
     , logs :: [String]         -- Logging
@@ -47,4 +50,28 @@ data TcEnv
                                -- context reduction
     }
 
+initTcEnv :: TcEnv 
+initTcEnv = TcEnv primCtx 
+                  primDataEnv
+                  primTypeEnv
+                  primInstEnv 
+                  Nothing
+                  Nothing 
+                  mempty 
+                  namePool 
+                  []
+                  False 
+                  True 
+                  100
 
+primCtx :: Env 
+primCtx = Map.empty 
+
+primDataEnv :: DataEnv 
+primDataEnv = Map.empty 
+
+primTypeEnv :: TypeEnv 
+primTypeEnv = Map.empty 
+
+primInstEnv :: InstEnv 
+primInstEnv = Map.empty 

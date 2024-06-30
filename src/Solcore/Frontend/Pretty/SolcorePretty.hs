@@ -8,6 +8,7 @@ import Solcore.Frontend.Syntax.Contract
 import Solcore.Frontend.Syntax.Name 
 import Solcore.Frontend.Syntax.Stmt 
 import Solcore.Frontend.Syntax.Ty
+import Solcore.Frontend.TypeInference.TcSubst 
 
 import Text.PrettyPrint.HughesPJ
 
@@ -22,6 +23,9 @@ class Pretty a where
 instance Pretty a => Pretty (Qual a) where 
   ppr (ps :=> t) 
     = pprContext True ps <+> ppr t
+
+instance Pretty ([Pred],Ty) where 
+  ppr (x, y) = ppr (x :=> y)
 
 instance Pretty CompUnit where 
   ppr (CompUnit imps cs)
@@ -260,6 +264,10 @@ instance Pretty Name where
 instance Pretty QualName where 
   ppr = dotSep . map ppr . unQName
 
+instance Pretty Subst where 
+  ppr = braces . commaSep . map go . unSubst
+    where 
+      go (v,t) = ppr v <+> text "+->" <+> ppr t
 
 dotSep :: [Doc] -> Doc
 dotSep = hcat . punctuate dot 

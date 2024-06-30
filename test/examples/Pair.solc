@@ -1,0 +1,17 @@
+contract Pair [a,b] {
+  fst : a ;
+  snd : b ;
+
+  constructor (x,y) {
+    fst = x;
+    snd = y;
+  }
+
+  function getFst() {
+    return fst;
+  }
+
+  function getSnd() {
+    return snd;
+  }
+}

@@ -1,0 +1,7 @@
+contract Simple {
+  val : Word ;
+
+  function getVal () {
+    return val ;
+  }
+}

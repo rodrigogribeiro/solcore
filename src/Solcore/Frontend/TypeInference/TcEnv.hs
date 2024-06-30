@@ -13,31 +13,35 @@ import Solcore.Primitives.Primitives
 
 
 -- definition of type environment  
-
-type Env = Map Name Scheme
-type DataEnv = Map Name Scheme
-type TypeEnv = Map Name TypeInfo 
-type FieldEnv = Map Name Scheme 
-type FunctionEnv = Map Name Scheme 
-type Inst = Qual Pred 
-type InstEnv = Map Name [Inst] 
-
+type Arity = Int 
+-- type constructor arity and names of constructors 
 data TypeInfo 
   = TypeInfo {
-      fieldEnv :: FieldEnv   
-    , funEnv :: FunctionEnv
-    }
-    deriving (Eq, Show, Ord)
+      arity :: Arity         -- number of type parameters 
+    , constrNames :: [Name]  -- list of data constructor names 
+    , fieldNames :: [Name]   -- list of field names 
+    } deriving (Eq, Ord, Show)
 
-emptyTypeInfo :: TypeInfo 
-emptyTypeInfo = TypeInfo Map.empty Map.empty 
+-- name of constructor and its scheme
+type ConInfo = (Name, Scheme)
+-- number of weak parameters and method names
+type Method = Name 
+type ClassInfo = (Arity, [Method])
+type Table a = Map Name a 
+-- typing environment 
+type Env = Table Scheme
+type ClassTable = Table ClassInfo
+type TypeTable = Table TypeInfo
+type Inst = Qual Pred 
+type InstTable = Table [Inst] 
 
 data TcEnv 
   = TcEnv {
       ctx :: Env               -- Variable environment
-    , constructors :: DataEnv  -- ADT constructor environment
-    , typeEnv :: TypeEnv       -- Type environment
-    , instEnv :: InstEnv       -- Instance Environment
+    , typeEnv :: TypeTable     -- Type environment
+    , instEnv :: InstTable     -- Instance Environment
+    , typeTable :: TypeTable   -- Type information environment 
+    , classTable :: ClassTable -- Class information table
     , contract :: Maybe Name   -- current contract name 
                                -- used to type check calls.
     , returnType :: Maybe Ty   -- current function return type.
@@ -52,26 +56,28 @@ data TcEnv
 
 initTcEnv :: TcEnv 
 initTcEnv = TcEnv primCtx 
-                  primDataEnv
                   primTypeEnv
-                  primInstEnv 
+                  primInstEnv
+                  primTypeEnv
+                  primClassEnv 
                   Nothing
                   Nothing 
                   mempty 
                   namePool 
                   []
-                  False 
+                  True 
                   True 
                   100
 
 primCtx :: Env 
 primCtx = Map.empty 
 
-primDataEnv :: DataEnv 
-primDataEnv = Map.empty 
-
-primTypeEnv :: TypeEnv 
+primTypeEnv :: TypeTable 
 primTypeEnv = Map.empty 
 
-primInstEnv :: InstEnv 
+primInstEnv :: InstTable
 primInstEnv = Map.empty 
+
+primClassEnv :: ClassTable 
+primClassEnv = Map.empty 
+

@@ -40,6 +40,9 @@ getEnvFreeVars :: TcM [Tyvar]
 getEnvFreeVars 
   = concat <$> gets (Map.map fv . ctx)
 
+unify :: Ty -> Ty -> TcM Subst
+unify t t' = mgu t t' >>= extSubst
+
 -- type instantiation 
 
 freshInst :: Scheme -> TcM (Qual Ty)
@@ -62,16 +65,21 @@ withCurrentSubst t = do
 getSubst :: TcM Subst 
 getSubst = gets subst
 
-extSubst :: Subst -> TcM ()
-extSubst s = modify ext where
+extSubst :: Subst -> TcM Subst
+extSubst s = modify ext >> getSubst where
     ext st = st{ subst = s <> subst st }
+
+clearSubst :: TcM ()
+clearSubst = modify (\ st -> st {subst = mempty})
 
 -- current contract manipulation 
 
-setCurrentContract :: Name -> TcM ()
-setCurrentContract n 
-  = modify (\ ctx -> ctx{contract = Just n
+setCurrentContract :: Name -> Arity -> TcM ()
+setCurrentContract n ar 
+  = modify (\ ctx -> ctx{ contract = Just n
                         , typeEnv = Map.insert n emptyTypeInfo Map.empty })
+    where 
+      emptyTypeInfo = TypeInfo ar [] []
 
 askCurrentContract :: TcM Name 
 askCurrentContract 
@@ -80,6 +88,25 @@ askCurrentContract
       maybe (throwError "Impossible! Lacking current contract name!")
             pure  
             n 
+
+-- manipulating contract field information
+
+askField :: Name -> Name -> TcM Scheme 
+askField cn fn 
+  = do 
+      ti <- askTypeInfo cn 
+      when (fn `notElem` fieldNames ti) 
+           (undefinedField cn fn)
+      askEnv fn
+
+-- manipulating data constructor information 
+
+checkConstr :: Name -> Name -> TcM ()
+checkConstr tn cn 
+  = do 
+      ti <- askTypeInfo tn 
+      when (cn `notElem` constrNames ti)
+           (undefinedConstr tn cn)
 
 -- current function return type 
 
@@ -129,25 +156,14 @@ withLocalEnv ta
 
 -- environment operations: variables 
 
-maybeAskVar :: Name -> TcM (Maybe Scheme)
-maybeAskVar n = gets (Map.lookup n . ctx)
+maybeAskEnv :: Name -> TcM (Maybe Scheme)
+maybeAskEnv n = gets (Map.lookup n . ctx)
 
-askVar :: Name -> TcM Scheme 
-askVar n 
+askEnv :: Name -> TcM Scheme 
+askEnv n 
   = do 
-      s <- maybeAskVar n
+      s <- maybeAskEnv n
       maybe (undefinedName n) pure s
-
--- constructors
-
-maybeAskCon :: Name -> TcM (Maybe Scheme)
-maybeAskCon n = gets (Map.lookup n . constructors)
-
-askCon :: Name -> TcM Scheme
-askCon n 
-  = do 
-      t <- maybeAskCon n 
-      maybe (undefinedName n) pure t
 
 -- type information
 
@@ -168,51 +184,13 @@ modifyTypeInfo n ti
         let tenv' = Map.insert n ti tenv 
         modify (\env -> env{typeEnv = tenv'})
 
--- field information 
-
-maybeAskField :: Name -> Name -> TcM (Maybe Scheme)
-maybeAskField t n 
-  = do 
-      ti <- askTypeInfo t 
-      pure $ Map.lookup n (fieldEnv ti)
-
-askField :: Ty -> Name -> TcM Scheme
-askField (TyCon n _) n' 
-  = do 
-      s <- maybeAskField n n' 
-      maybe (undefinedField n' n) pure s
-askField t _
-  = throwError $ unwords ["Invalid type constructor:", pretty t]
-
--- function information 
-
-maybeAskFun :: Name -> Name -> TcM (Maybe Scheme)
-maybeAskFun t n 
-  = do 
-      ti <- askTypeInfo t 
-      pure $ Map.lookup n (funEnv ti)
-
-askFun :: Name -> Name -> TcM Scheme 
-askFun t n 
-  = do 
-      s <- maybeAskFun t n 
-      maybe (undefinedFunction t n) pure s 
-
-extFunEnv :: Name -> Scheme -> TcM ()
-extFunEnv n s 
-  = do 
-      cn <- askCurrentContract 
-      ti <- askTypeInfo cn
-      let ti' = ti{funEnv = Map.insert n s (funEnv ti)}
-      modifyTypeInfo cn ti'
-
 -- manipulating the instance environment 
 
 askInstEnv :: Name -> TcM [Inst]
 askInstEnv n 
   = maybe [] id . Map.lookup n <$> gets instEnv
 
-getInstEnv :: TcM InstEnv 
+getInstEnv :: TcM InstTable 
 getInstEnv = gets instEnv
 
 addInstance :: Name -> Inst -> TcM ()
@@ -284,6 +262,13 @@ undefinedField n n'
                          , "in type:"
                          , pretty n'
                          ]
+
+undefinedConstr :: Name -> Name -> TcM a 
+undefinedConstr tn cn 
+  = throwError $ unlines [ "Undefined constructor:"
+                         , pretty cn 
+                         , "in type:"
+                         , pretty tn]
 
 undefinedFunction :: Name -> Name -> TcM a 
 undefinedFunction t n 

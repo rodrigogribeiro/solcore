@@ -32,7 +32,7 @@ tcCompUnit (CompUnit imps cs)
       loadImports imps 
       mapM_ tcContract cs 
 
--- FIXME load import information
+-- TODO load import information
 
 loadImports :: [Import] -> TcM ()
 loadImports _ = return () 
@@ -43,16 +43,17 @@ tcContract :: Contract -> TcM ()
 tcContract c@(Contract n vs decls) 
   = withLocalEnv do
       info ["Start type inference for:", pretty n]
-      -- initializeEnv c
-      setCurrentContract n 
-      mapM_ tcDecl decls 
+      initializeEnv c
+      mapM_ tcDecl' decls
+    where 
+      tcDecl' d = clearSubst >> tcDecl d
 
 -- initializing context for a contract
 
 initializeEnv :: Contract -> TcM ()
 initializeEnv (Contract n vs decls)
   = do 
-      setCurrentContract n 
+      setCurrentContract n (length vs) 
       mapM_ checkDecl decls 
 
 checkDecl :: Decl -> TcM ()
@@ -64,6 +65,8 @@ checkDecl (InstDecl i)
   = checkInstance i 
 checkDecl (FunDecl (FunDef sig _))
   = extSignature sig
+checkDecl (FieldDecl fd)
+  = tcField fd
 checkDecl _ = return ()
 
 extSignature :: Signature -> TcM ()
@@ -75,7 +78,7 @@ extSignature (Signature n ctx ps t)
         ty = funtype argTys t' 
         vs = fv (ctx :=> ty)
       sch <- generalize (ctx, ty) 
-      extFunEnv n sch
+      extEnv n sch
 
 -- including contructors on environment
 
@@ -125,30 +128,44 @@ tcBindGroup binds
       info ["Starting typing bindgroup"]
       funs <- mapM scanFun binds 
       qts <- mapM tcFunDef funs
-      qts' <- withCurrentSubst qts 
+      s <- getSubst
+      info ["Current subst: ", pretty s]
+      qts' <- withCurrentSubst qts
+      info ["Infered types:", unlines $ map pretty qts']
       schs <- mapM generalize qts'
       info ["Generalize scheme:", unlines $ map pretty schs]
       let names = map (sigName . funSignature) funs 
           results = zip names schs 
-      mapM_ (uncurry extFunEnv) results
+      mapM_ (uncurry extEnv) results
       info ["Finish typing bindgroup"]
 
 -- type checking a single bind
 
 tcFunDef :: FunDef -> TcM ([Pred], Ty)
-tcFunDef (FunDef sig bd) 
+tcFunDef d@(FunDef sig bd) 
   = withLocalEnv do
       info ["Type inference for function:", pretty (sigName sig)]
       t' <- maybe freshTyVar pure (sigReturn sig)
       setReturnTy t'
       ts <- mapM addArg (sigParams sig)
-      mapM_ tcStmt bd
       info ["Type inference for body."]
+      mapM_ tcStmt' bd
       sch <- schemeFromSignature sig 
       (ps :=> t) <- freshInst sch
-      info ["Resulting type for:", pretty $ sigName sig, " is ", pretty t]
+      unify t (funtype ts t') `wrapError` d
       s <- getSubst
       pure (apply s (ps, t))
+
+tcStmt' :: Stmt -> TcM [Pred]
+tcStmt' s 
+  = do 
+      info ["Type inference for:", pretty s]
+      (ps, b) <- tcStmt s
+      -- check if we need to default to unit 
+      tr <- askReturnTy
+      info [show b]
+      when b (unify tr unit >> return ())
+      pure ps
 
 addArg :: Param -> TcM Ty 
 addArg (Typed n t) 
@@ -256,7 +273,7 @@ inHnf (InCls c t args) = hnf t where
   hnf (TyCon _ _) = False
 inHnf (_ :~: _) = False
 
-byInstM :: InstEnv -> Pred -> Maybe ([Pred], Subst)
+byInstM :: InstTable -> Pred -> Maybe ([Pred], Subst)
 byInstM ce p@(InCls i t as) 
   = msum [tryInst it | it <- insts ce i] 
     where
@@ -304,7 +321,7 @@ addClassMethod p@(InCls _ _ _) (Signature f _ ps t)
       t' <- maybe freshTyVar pure t
       let ty = funtype tps t'
           vs = fv ty
-      extFunEnv f (Forall vs ([p] :=> ty))
+      extEnv f (Forall vs ([p] :=> ty))
 addClassMethod p@(_ :~: _) (Signature n _ _ _) 
   = throwError $ unlines [
                     "Invalid constraint:"
@@ -379,7 +396,7 @@ checkMethod ih@(InCls n t ts) (FunDef sig bd)
   = do
       cn <- askCurrentContract
       -- getting current method signature in class 
-      st@(Forall _ (qs :=> _)) <- askFun cn (sigName sig)
+      st@(Forall _ (qs :=> _)) <- askEnv (sigName sig)
       p <- maybeToTcM (unwords [ "Constraint for"
                                , unName n
                                , "not found in type of"

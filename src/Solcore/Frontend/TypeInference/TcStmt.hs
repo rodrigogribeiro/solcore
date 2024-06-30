@@ -46,8 +46,9 @@ tcStmt m@(Return e)
   = do 
       (ps, t) <- tcExp e 
       t' <- askReturnTy
-      s1 <- getSubst
       s <- unify t t' `wrapError` m
+      info ["unify: ", pretty t, " with ", pretty t']
+      setReturnTy (apply s t')
       pure (apply s ps, False)
 tcStmt (Match es eqns) 
   = do 
@@ -56,7 +57,9 @@ tcStmt (Match es eqns)
 
 tcEquations :: [([Pred], Ty)] -> Equations -> TcM ([Pred], Bool)
 tcEquations qts eqns 
-  = (f . unzip) <$> mapM (tcEquation qts) eqns
+  = do 
+      (ps, b) <- (f . unzip) <$> mapM (tcEquation qts) eqns
+      return (ps, b)
     where 
       f (xss, bs) = (concat xss, and bs)
 
@@ -64,8 +67,7 @@ tcEquation :: [([Pred], Ty)] -> Equation -> TcM ([Pred], Bool)
 tcEquation qts (ps, ss) 
   = do 
       (pss, lctx) <- tcPats qts ps 
-      let f (xs, bs) = (concat xs, and bs)
-      (pss', b) <- (f . unzip) <$> withLocalCtx lctx (mapM tcStmt ss)
+      (pss', b) <- withLocalCtx lctx (tcBody ss)
       pure (pss ++ pss', b)
 
 tcPats :: [([Pred],Ty)] -> [Pat] -> TcM ([Pred], [(Name,Scheme)])
@@ -138,8 +140,8 @@ tcExp e@(Con n es)
       tn <- typeName (apply s t')
       -- checking if the constructor belongs to type tn 
       checkConstr tn n
-      let ps' = apply s (concat (ps : pss))
-      pure (ps', t')
+      let ps' = concat (ps : pss)
+      pure (apply s (ps', t'))
 tcExp (FieldAccess e n) 
   = do
       -- infering expression type 
@@ -158,7 +160,7 @@ tcExp e@(Lam args bd)
       r <- freshTyVar 
       t1 <- askReturnTy
       setReturnTy r 
-      ps <- tcBody bd 
+      (ps,b) <- tcBody bd 
       setReturnTy t1 
       s <- getSubst
       let res = apply s (ps, funtype ts' r)
@@ -166,7 +168,7 @@ tcExp e@(Lam args bd)
       info ["Infered type for lambda:\n", pretty e, "\n:\n", pretty qt]
       pure res
 
-tcBody :: Body -> TcM [Pred]
+tcBody :: Body -> TcM ([Pred], Bool)
 tcBody ss 
   = do 
       (pss, bs) <- unzip <$> mapM tcStmt ss 
@@ -176,7 +178,7 @@ tcBody ss
       when b (unify tr unit >> return ()) 
       s <- getSubst 
       setReturnTy (apply s tr)
-      pure (concat pss)
+      pure (concat pss, b)
 
 tcCall :: Maybe Exp -> Name -> [Exp] -> TcM ([Pred], Ty)
 tcCall Nothing n args 

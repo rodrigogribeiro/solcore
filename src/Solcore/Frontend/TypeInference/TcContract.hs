@@ -87,7 +87,9 @@ checkDataType (DataTy n vs constrs)
   = do
       vals' <- mapM (\ (n, ty) -> (n,) <$> generalize ([], ty)) vals
       mapM_ (uncurry extEnv) vals'
+      modifyTypeInfo n ti
     where 
+      ti = TypeInfo (length vs) (map fst vals) []
       tc = TyCon n (TyVar <$> vs) 
       vals = map constrBind constrs        
       constrBind c = (constrName c, (funtype (constrTy c) tc))
@@ -137,7 +139,6 @@ tcBindGroup binds
       let names = map (sigName . funSignature) funs 
           results = zip names schs 
       mapM_ (uncurry extEnv) results
-      info ["Finish typing bindgroup"]
 
 -- type checking a single bind
 
@@ -149,38 +150,12 @@ tcFunDef d@(FunDef sig bd)
       setReturnTy t'
       ts <- mapM addArg (sigParams sig)
       info ["Type inference for body."]
-      mapM_ tcStmt' bd
+      ps1 <- tcBody bd
       sch <- schemeFromSignature sig 
       (ps :=> t) <- freshInst sch
       unify t (funtype ts t') `wrapError` d
       s <- getSubst
       pure (apply s (ps, t))
-
-tcStmt' :: Stmt -> TcM [Pred]
-tcStmt' s 
-  = do 
-      info ["Type inference for:", pretty s]
-      (ps, b) <- tcStmt s
-      -- check if we need to default to unit 
-      tr <- askReturnTy
-      info [show b]
-      when b (unify tr unit >> return ())
-      pure ps
-
-addArg :: Param -> TcM Ty 
-addArg (Typed n t) 
-  = do 
-      extEnv n (monotype t)
-      pure t 
-addArg (Untyped n) 
-  = do 
-      t <- freshTyVar
-      extEnv n (monotype t)
-      pure t
-
-tcParam :: Param -> TcM Param
-tcParam p@(Typed _ _) = pure p
-tcParam (Untyped n) = Typed n <$> freshTyVar
 
 scanFun :: Decl -> TcM FunDef 
 scanFun (FunDecl (FunDef sig bd)) 

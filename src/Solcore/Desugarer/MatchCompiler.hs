@@ -258,7 +258,6 @@ groupByConstr
       conEq ((PCon n _) : _, _) ((PCon n' _) : _ , _) = n == n' 
       conEq _ _ = False
 
--- probably here is the bug: we need the old-patterns to be part of the new set of equations.
 
 eqnsForVars :: [Exp] -> [Stmt] -> Equations -> CompilerM Equations 
 eqnsForVars es d eqns 
@@ -343,12 +342,14 @@ instance Apply Exp where
   apply _ e@(Lit _) = e 
   apply s (Call me n es)
     = Call (apply s me) n (apply s es)
+  apply s (Lam args bd) 
+    = Lam args (apply s bd)
 
 instance Apply Pat where 
   apply _ p = p
 
   vars (PVar v) = [v]
-  vars (PCon _ ps) = foldr(union . vars) [] ps 
+  vars (PCon _ ps) = foldr (union . vars) [] ps 
   vars _ = []
 
 -- replacing wildcards by fresh pattern variables 
@@ -387,6 +388,8 @@ instance ReplaceWildcard Exp where
     = Call <$> (replace me) <*> 
                pure n <*> 
                replace es
+  replace (Lam args bd) 
+    = Lam args <$> replace bd
 
 instance ReplaceWildcard Stmt where 
   replace (e1 := e2) 

@@ -1,0 +1,13 @@
+contract Peano {
+  data Nat = Zero | Succ[Nat]
+  
+  function add (n, m) {
+    match n { 
+    | Zero => 
+        return m; 
+     
+    | Succ[n1] => 
+        return Succ[add(n1,m)];
+    };
+  }
+}

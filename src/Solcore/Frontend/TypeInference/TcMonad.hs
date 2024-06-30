@@ -69,6 +69,14 @@ extSubst :: Subst -> TcM Subst
 extSubst s = modify ext >> getSubst where
     ext st = st{ subst = s <> subst st }
 
+withLocalSubst :: HasType a => TcM a -> TcM a 
+withLocalSubst m 
+  = do 
+      s <- getSubst 
+      r <- m 
+      modify (\ st -> st {subst = s})
+      pure r
+
 clearSubst :: TcM ()
 clearSubst = modify (\ st -> st {subst = mempty})
 
@@ -183,6 +191,7 @@ modifyTypeInfo n ti
         tenv <- gets typeEnv
         let tenv' = Map.insert n ti tenv 
         modify (\env -> env{typeEnv = tenv'})
+
 
 -- manipulating the instance environment 
 

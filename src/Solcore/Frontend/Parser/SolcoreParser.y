@@ -34,6 +34,7 @@ import Solcore.Primitives.Primitives
       'function' {Token _ TFunction}
       'constructor' {Token _ TConstructor}
       'return'   {Token _ TReturn}
+      'lam'      {Token _ TLam}
       ';'        {Token _ TSemi}
       ':'        {Token _ TColon}
       ','        {Token _ TComma}
@@ -209,6 +210,7 @@ StmtList : Stmt ';' StmtList                       {$1 : $3}
 Stmt :: { Stmt }
 Stmt : Expr '=' Expr                               {$1 := $3}
      | 'let' Name ':' Type InitOpt                 {Let $2 (Just $4) $5}
+     | 'let' Name InitOpt                          {Let $2 Nothing $3}
      | Expr                                        {StmtExp $1}
      | 'return' Expr                               {Return $2}
      | 'match' MatchArgList '{' Equations  '}'     {Match $2 $4}
@@ -231,6 +233,7 @@ Expr : Name                                        {Var $1}
      | Expr '.' Name                               {FieldAccess $1 $3}
      | Expr '.' Name FunArgs                       {Call (Just $1) $3 $4}
      | Name FunArgs                                {Call Nothing $1 $2}
+     | 'lam' '(' ParamList ')' Body                {Lam $3 $5} 
 
 ConArgs :: {[Exp]}
 ConArgs : '[' ExprCommaList ']'                    {$2}
@@ -280,11 +283,14 @@ Literal : number                                   {IntLit $ toInteger $1}
 
 -- basic type definitions 
 
-
 Type :: { Ty }
 Type : Con OptTypeParam                            {TyCon $1 $2}
      | Var                                         {TyVar  $1}
-        
+     | LamType                                     {uncurry funtype $1}
+
+LamType :: {([Ty], Ty)}
+LamType : '(' TypeCommaList ')' '->' Type          {($2, $5)}
+
 Var :: { Tyvar }
 Var : Name                                         {TVar $1}  
 

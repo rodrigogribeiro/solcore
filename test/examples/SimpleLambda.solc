@@ -1,0 +1,8 @@
+contract SimpleLambda{
+  function f () {
+    let n = lam (x) {
+      return x;
+    } ; 
+    return 0; 
+  }
+}

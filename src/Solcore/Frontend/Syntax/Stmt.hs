@@ -18,6 +18,11 @@ data Stmt
 
 type Body = [Stmt]
 
+data Param 
+  = Typed Name Ty 
+  | Untyped Name 
+  deriving (Eq, Ord, Show)
+
 -- definition of the expression syntax
 
 data Exp 
@@ -26,6 +31,7 @@ data Exp
   | FieldAccess Exp Name           -- field access  
   | Lit Literal                    -- literal 
   | Call (Maybe Exp) Name [Exp]    -- function call
+  | Lam [Param] Body               -- lambda-abstraction
   deriving (Eq, Ord, Show)
 
 -- pattern matching equations 

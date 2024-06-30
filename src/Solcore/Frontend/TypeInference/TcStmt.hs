@@ -45,7 +45,8 @@ tcStmt (StmtExp e)
 tcStmt m@(Return e)
   = do 
       (ps, t) <- tcExp e 
-      t' <- askReturnTy 
+      t' <- askReturnTy
+      s1 <- getSubst
       s <- unify t t' `wrapError` m
       pure (apply s ps, False)
 tcStmt (Match es eqns) 
@@ -57,13 +58,13 @@ tcEquations :: [([Pred], Ty)] -> Equations -> TcM ([Pred], Bool)
 tcEquations qts eqns 
   = (f . unzip) <$> mapM (tcEquation qts) eqns
     where 
-      f (xss, bs) = (concat xss, or bs)
+      f (xss, bs) = (concat xss, and bs)
 
 tcEquation :: [([Pred], Ty)] -> Equation -> TcM ([Pred], Bool)
 tcEquation qts (ps, ss) 
   = do 
       (pss, lctx) <- tcPats qts ps 
-      let f (xs, bs) = (concat xs, or bs)
+      let f (xs, bs) = (concat xs, and bs)
       (pss', b) <- (f . unzip) <$> withLocalCtx lctx (mapM tcStmt ss)
       pure (pss ++ pss', b)
 
@@ -151,6 +152,31 @@ tcExp (FieldAccess e n)
       pure (ps ++ ps', t')
 tcExp (Call me n args)
   = tcCall me n args 
+tcExp e@(Lam args bd)
+  = withLocalSubst do 
+      ts' <- mapM addArg args 
+      r <- freshTyVar 
+      t1 <- askReturnTy
+      setReturnTy r 
+      ps <- tcBody bd 
+      setReturnTy t1 
+      s <- getSubst
+      let res = apply s (ps, funtype ts' r)
+          qt = apply s (ps :=> (funtype ts' r))
+      info ["Infered type for lambda:\n", pretty e, "\n:\n", pretty qt]
+      pure res
+
+tcBody :: Body -> TcM [Pred]
+tcBody ss 
+  = do 
+      (pss, bs) <- unzip <$> mapM tcStmt ss 
+      tr <- askReturnTy
+      let b = and bs
+      info ["Need to unify with unify?", show b]
+      when b (unify tr unit >> return ()) 
+      s <- getSubst 
+      setReturnTy (apply s tr)
+      pure (concat pss)
 
 tcCall :: Maybe Exp -> Name -> [Exp] -> TcM ([Pred], Ty)
 tcCall Nothing n args 
@@ -172,6 +198,21 @@ tcCall (Just e) n args
       let ps' = foldr (union . fst) [] rss `union` ps 
       t' <- returnTy t 
       pure (apply s' ps', apply s' t')
+
+addArg :: Param -> TcM Ty 
+addArg (Typed n t) 
+  = do 
+      extEnv n (monotype t)
+      pure t 
+addArg (Untyped n) 
+  = do 
+      t <- freshTyVar
+      extEnv n (monotype t)
+      pure t
+
+tcParam :: Param -> TcM Param
+tcParam p@(Typed _ _) = pure p
+tcParam (Untyped n) = Typed n <$> freshTyVar
 
 typeName :: Ty -> TcM Name 
 typeName (TyCon n _) = pure n

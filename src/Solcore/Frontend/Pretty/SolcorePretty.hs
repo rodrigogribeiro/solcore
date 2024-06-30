@@ -207,6 +207,12 @@ instance Pretty Exp where
   ppr (Lit l) = ppr l 
   ppr (Call e n es) 
     = pprE e <> ppr n <> (parens $ commaSep $ map ppr es)
+  ppr (Lam args bd) 
+    = text "lam" <+> 
+      pprParams args <+> 
+      lbrace $$ 
+      nest 3 (vcat (map ppr bd)) $$
+      rbrace
 
 pprE :: Maybe Exp -> Doc  
 pprE Nothing = ""

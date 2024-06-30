@@ -7,6 +7,10 @@ contract Pair [a,b] {
     snd = y;
   }
 
+  function setFst (x) {
+    fst = x;
+  }
+
   function getFst() {
     return fst;
   }

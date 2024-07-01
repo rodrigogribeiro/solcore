@@ -8,6 +8,7 @@ import Control.Monad.Writer
 
 import Data.Either 
 import Data.List
+import qualified Data.List.NonEmpty as L
 
 import Solcore.Frontend.Pretty.SolcorePretty
 import Solcore.Frontend.Syntax.Contract
@@ -165,12 +166,12 @@ thirdCase _ _ []
 thirdCase (e : es) d eqns 
   = do 
       v@(Var n) <- freshExpVar
-      let vs = foldr (union . vars . fst) [] eqns 
+      let 
+          vs = foldr (union . L.head . L.fromList . map vars . fst) [] eqns 
           s  = map (\ vi -> (vi, n)) vs 
           eqns' = map (\ (_ : ps, ss) -> (ps, apply s ss)) eqns
-          f xs = (Let n Nothing (Just e)) : xs
-      res <- f <$> matchCompilerM es d eqns' 
-      return res 
+      res <- matchCompilerM es d eqns' 
+      return (Let n Nothing (Just e) : res) 
 
 -- Implementation of the fourth case 
 
@@ -178,7 +179,7 @@ fourthCase :: [Exp] -> [Stmt] -> Equations -> CompilerM [Stmt]
 fourthCase _ _ []
   = throwError "Panic! Impossible --- fourthCase."
 fourthCase (e : es) d eqns 
-  = do 
+  = do
       let (cons, vars) = span isConstr eqns
       conEqns <- eqnsForConstrs (e : es) d cons 
       defEqn <- eqnsForVars es d vars 

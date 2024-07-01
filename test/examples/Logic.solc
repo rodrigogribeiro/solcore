@@ -1,6 +1,13 @@
 contract Logic {
   data Bool = True | False 
 
+  function not (x) {
+    match x {
+    | True => return False ; 
+    | False => return True ; 
+    };
+  }
+
   function and(x, y) {
     match x, y {
     | False, _ => return False ; 
@@ -8,4 +15,12 @@ contract Logic {
     };
   }
 
+  function and1 (x, y) {
+    match x, y {
+    | False, False => return False ; 
+    | True , False => return False; 
+    | False ,True => return False; 
+    | True, True => return True;
+    };
+  }
 }

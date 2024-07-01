@@ -14,9 +14,8 @@ import Solcore.Frontend.TypeInference.TcUnify
 import Solcore.Primitives.Primitives
 
 -- type inference for statements
--- boolean returns determines when defaulting to unit 
 
-tcStmt :: Stmt -> TcM ([Pred], Bool)
+tcStmt :: Stmt -> TcM ([Pred], Ty)
 tcStmt e@(lhs := rhs) 
   = do 
       (ps1, t1) <- tcExp lhs
@@ -25,7 +24,7 @@ tcStmt e@(lhs := rhs)
       info ["Infered type for ", pretty rhs, " is ", pretty (ps2 :=> t2)]
       s <- unify t1 t2 `wrapError` e
       extSubst s
-      pure (apply s (ps1 ++ ps2), True)
+      pure (apply s (ps1 ++ ps2), unit)
 tcStmt e@(Let n mt me)
   = do 
       (psf, tf) <- case (mt, me) of
@@ -39,38 +38,34 @@ tcStmt e@(Let n mt me)
                       (Nothing, Nothing) -> 
                         ([],) <$> freshTyVar
       extEnv n (monotype $ stack tf) 
-      pure (psf, True)
+      pure (psf, unit)
 tcStmt (StmtExp e)
-  = ((, True) . fst) <$> tcExp e 
+  = tcExp e 
 tcStmt m@(Return e)
   = do 
       (ps, t) <- tcExp e 
-      t' <- askReturnTy
-      s <- unify t t' `wrapError` m
-      info ["unify: ", pretty t, " with ", pretty t']
-      setReturnTy (apply s t)
-      s1 <- getSubst
-      info ["subst:", pretty s1]
-      pure (apply s ps, False)
+      pure (ps, t)
 tcStmt (Match es eqns) 
   = do 
-      qts <- mapM tcExp es 
-      tcEquations qts eqns
+      qts <- mapM tcExp es
+      resTy <- freshTyVar
+      tcEquations qts resTy eqns
 
-tcEquations :: [([Pred], Ty)] -> Equations -> TcM ([Pred], Bool)
-tcEquations qts eqns 
+tcEquations :: [([Pred], Ty)] -> Ty -> Equations -> TcM ([Pred], Ty)
+tcEquations qts resTy eqns 
   = do 
-      (ps, b) <- (f . unzip) <$> mapM (tcEquation qts) eqns
-      return (ps, b)
-    where 
-      f (xss, bs) = (concat xss, and bs)
+      (ps, ts) <- unzip <$> mapM (tcEquation qts resTy) eqns
+      s <- getSubst
+      info ["Types infered:", unlines $ map pretty ts]
+      return (apply s (concat ps, resTy))
 
-tcEquation :: [([Pred], Ty)] -> Equation -> TcM ([Pred], Bool)
-tcEquation qts (ps, ss) 
+tcEquation :: [([Pred], Ty)] -> Ty -> Equation -> TcM ([Pred], Ty)
+tcEquation qts resTy (ps, ss) 
   = do 
       (pss, lctx) <- tcPats qts ps 
-      (pss', b) <- withLocalCtx lctx (tcBody ss)
-      pure (pss ++ pss', b)
+      (pss', t) <- withLocalCtx lctx (tcBody ss)
+      s <- unify t resTy 
+      pure (apply s (pss ++ pss', t))
 
 tcPats :: [([Pred],Ty)] -> [Pat] -> TcM ([Pred], [(Name,Scheme)])
 tcPats qts ps 
@@ -159,48 +154,37 @@ tcExp (Call me n args)
 tcExp e@(Lam args bd)
   = withLocalSubst do 
       ts' <- mapM addArg args 
-      r <- freshTyVar 
-      t1 <- askReturnTy
-      setReturnTy r 
-      (ps,b) <- tcBody bd 
-      setReturnTy t1 
+      (ps,t') <- tcBody bd 
       s <- getSubst
-      let res = apply s (ps, funtype ts' r)
-          qt = apply s (ps :=> (funtype ts' r))
+      let res = apply s (ps, funtype ts' t')
+          qt = apply s (ps :=> (funtype ts' t'))
       info ["Infered type for lambda:\n", pretty e, "\n:\n", pretty qt]
       pure res
 
-tcBody :: Body -> TcM ([Pred], Bool)
-tcBody ss 
-  = do 
-      (pss, bs) <- unzip <$> mapM tcStmt ss 
-      tr <- askReturnTy
-      let b = and bs
-      info ["Need to unify with unify?", show b]
-      when b (unify tr unit >> return ()) 
-      s <- getSubst 
-      setReturnTy (apply s tr)
-      pure (concat pss, b)
+tcBody :: Body -> TcM ([Pred], Ty)
+tcBody [] = pure ([], unit)
+tcBody [s] = tcStmt s 
+tcBody (s : ss) = tcStmt s >> tcBody ss 
 
 tcCall :: Maybe Exp -> Name -> [Exp] -> TcM ([Pred], Ty)
 tcCall Nothing n args 
   = do 
       s <- askEnv n 
-      (ps :=> t) <- freshInst s 
+      (ps :=> t) <- freshInst s
+      t' <- freshTyVar 
       rss <- mapM tcExp args
-      s' <- unifyTypes (argTy t) (map snd rss)
+      s' <- unify t (funtype (map snd rss) t')
       let ps' = foldr (union . fst) [] rss `union` ps
-      t' <- returnTy t 
       pure (apply s' ps', apply s' t')
 tcCall (Just e) n args 
   = do 
       (ps, ct) <- tcExp e
       s <- askEnv n 
-      (ps :=> t) <- freshInst s 
+      (ps :=> t) <- freshInst s
+      t' <- freshTyVar
       rss <- mapM tcExp args 
-      s' <- unifyTypes (argTy t) (map snd rss)
+      s' <- unify t (funtype (map snd rss) t')
       let ps' = foldr (union . fst) [] rss `union` ps 
-      t' <- returnTy t 
       pure (apply s' ps', apply s' t')
 
 addArg :: Param -> TcM Ty 
@@ -223,13 +207,6 @@ typeName (TyCon n _) = pure n
 typeName t = throwError $ unlines ["Expected type, but found:"
                                   , pretty t
                                   ]
-
-returnTy :: Ty -> TcM Ty 
-returnTy t 
-  = case retTy t of 
-      Just t' -> return t' 
-      Nothing -> expectedFunction t
-
 -- errors 
 
 expectedFunction :: Ty -> TcM a

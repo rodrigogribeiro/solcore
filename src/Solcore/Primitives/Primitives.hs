@@ -10,6 +10,12 @@ import Solcore.Frontend.Syntax.Ty
 word :: Ty 
 word = TyCon "Word" []
 
+primAddWord :: (Name, Scheme)
+primAddWord = ("primAddWord", monotype (word :-> word :-> word))
+
+primEqWord :: (Name, Scheme)
+primEqWord = ("primEqWord", monotype (word :-> word :-> word))
+
 string :: Ty 
 string = TyCon "String" []
 
@@ -21,21 +27,5 @@ unit = TyCon "Unit" []
 
 arr :: Name  
 arr = "->"
-
--- desugaring interface for load / store 
-
-load :: Exp -> Exp 
-load e = Call Nothing loadName [e] 
-
-store :: Exp -> Exp -> Exp 
-store e1 e2 = undefined
-
--- basic names 
-
-storeName :: Name 
-storeName = Name "store"
-
-loadName :: Name 
-loadName = Name "load"
 
 

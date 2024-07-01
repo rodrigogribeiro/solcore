@@ -44,7 +44,6 @@ data TcEnv
     , classTable :: ClassTable -- Class information table
     , contract :: Maybe Name   -- current contract name 
                                -- used to type check calls.
-    , returnType :: Maybe Ty   -- current function return type.
     , subst :: Subst           -- Current substitution
     , nameSupply :: NameSupply -- Fresh name supply
     , logs :: [String]         -- Logging
@@ -60,7 +59,6 @@ initTcEnv = TcEnv primCtx
                   primInstEnv
                   primTypeEnv
                   primClassEnv 
-                  Nothing
                   Nothing 
                   mempty 
                   namePool 
@@ -70,7 +68,7 @@ initTcEnv = TcEnv primCtx
                   100
 
 primCtx :: Env 
-primCtx = Map.empty 
+primCtx = Map.fromList [primAddWord, primEqWord] 
 
 primTypeEnv :: TypeTable 
 primTypeEnv = Map.empty 

@@ -8,6 +8,7 @@ import Solcore.Frontend.Syntax.Contract
 import Solcore.Frontend.Syntax.Name 
 import Solcore.Frontend.Syntax.Stmt 
 import Solcore.Frontend.Syntax.Ty
+import Solcore.Frontend.TypeInference.NameSupply
 import Solcore.Frontend.TypeInference.TcSubst 
 
 import Text.PrettyPrint.HughesPJ
@@ -243,19 +244,26 @@ instance Pretty Pred where
     ppr t1 <+> text "~" <+> ppr t2
 
 instance Pretty Scheme where
-  ppr (Forall [] (ctx :=> t))
-    = pprContext True ctx <+> ppr t
-  ppr (Forall vs (ctx :=> t)) 
-    = text "forall"       <+> 
-      hsep (map ppr vs)   <+>
-      text "."            <+> 
-      pprContext True ctx <+>
-      ppr t 
+  ppr (Forall vs ty) = ppr' (Forall vs' ty') 
+    where 
+      vs' = TVar <$> take (length vs) namePool 
+      s = Subst (zip vs (TyVar <$> vs'))
+      ty' = apply s ty
+      ppr' (Forall [] (ctx :=> t))
+        = pprContext True ctx <+> ppr t
+      ppr' (Forall vs (ctx :=> t)) 
+        = text "forall"       <+> 
+          hsep (map ppr vs)   <+>
+          text "."            <+> 
+          pprContext True ctx <+>
+          ppr t 
 
 instance Pretty Ty where 
   ppr (TyVar v) = ppr v
-  ppr (TyCon (Name "->") ts) 
-    = hsep $ punctuate (text " ->") (map ppr ts)
+  ppr (t1@(_ :-> _) :-> t2) 
+    = parens (ppr t1) <+> text "->" <+> ppr t2
+  ppr (t1 :-> t2) 
+    = ppr t1 <+> (text " ->") <+> ppr t2
   ppr (TyCon n ts)
     = ppr n <> (pprTyParams ts)
 

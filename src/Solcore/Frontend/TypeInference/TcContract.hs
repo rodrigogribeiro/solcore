@@ -146,16 +146,17 @@ tcFunDef :: FunDef -> TcM ([Pred], Ty)
 tcFunDef d@(FunDef sig bd) 
   = withLocalEnv do
       info ["Type inference for function:", pretty (sigName sig)]
-      t' <- maybe freshTyVar pure (sigReturn sig)
-      setReturnTy t'
       ts <- mapM addArg (sigParams sig)
-      info ["Type inference for body."]
-      ps1 <- tcBody bd
-      sch <- schemeFromSignature sig 
+      (ps1, t') <- tcBody bd
+      info ["Type inference for body:", pretty t']
+      sch <- askEnv (sigName sig) 
       (ps :=> t) <- freshInst sch
-      unify t (funtype ts t') `wrapError` d
-      s <- getSubst
-      pure (apply s (ps, t))
+      let t1 = foldr (:->) t' ts
+      info ["Infered type before unification:", pretty t1]
+      info ["unify ", pretty t, " with ", pretty t1]
+      s <- unify t t1 `wrapError` d
+      info ["Final type:", pretty (apply s t1)]
+      pure (apply s (ps1 ++ ps, t1))
 
 scanFun :: Decl -> TcM FunDef 
 scanFun (FunDecl (FunDef sig bd)) 
@@ -304,14 +305,6 @@ addClassMethod p@(_ :~: _) (Signature n _ _ _)
                   , "in class method:"
                   , unName n
                   ]
-
-schemeFromSignature :: Signature -> TcM Scheme
-schemeFromSignature (Signature f ctx ps t)
-  = do 
-      tps <- mapM tyParam ps
-      t' <- maybe freshTyVar pure t 
-      let ty = funtype tps t'
-      pure (Forall (fv ty) (ctx :=> ty))
 
 -- checking instances and adding them in the environment
 

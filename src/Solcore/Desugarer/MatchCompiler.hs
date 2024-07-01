@@ -50,7 +50,6 @@ matchCompilerContract (Contract n ts ds)
         (Left err, _) -> return $ Left err 
         (Right ds', fs) -> return $ Right $ Contract n ts (ds' ++ map FunDecl fs)
 
-
 -- Compiler monad infra 
 
 type CompilerM a 

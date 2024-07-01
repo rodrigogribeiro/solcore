@@ -41,7 +41,11 @@ getEnvFreeVars
   = concat <$> gets (Map.map fv . ctx)
 
 unify :: Ty -> Ty -> TcM Subst
-unify t t' = mgu t t' >>= extSubst
+unify t t' 
+  = do
+      s <- getSubst 
+      s' <- mgu (apply s t) (apply s t') 
+      extSubst s'
 
 -- type instantiation 
 
@@ -115,19 +119,6 @@ checkConstr tn cn
       ti <- askTypeInfo tn 
       when (cn `notElem` constrNames ti)
            (undefinedConstr tn cn)
-
--- current function return type 
-
-setReturnTy :: Ty -> TcM ()
-setReturnTy t 
-  = modify (\ ctx -> ctx {returnType = Just t})
-
-askReturnTy :: TcM Ty 
-askReturnTy = do 
-  t <- gets returnType
-  maybe (throwError "Impossible! Lacking return type!")
-        pure 
-        t
 
 -- extending the environment with a new variable 
 

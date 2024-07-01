@@ -1,6 +1,7 @@
 contract Peano {
   data Nat = Zero | Succ[Nat]
-  
+  data Bool = True | False 
+
   function add (n, m) {
     match n { 
     | Zero => 
@@ -8,6 +9,27 @@ contract Peano {
      
     | Succ[n1] => 
         return Succ[add(n1,m)];
+    };
+  }
+
+  function not(x) {
+    match x {
+    | True => return False; 
+    | _    => return True;
+    };
+  }
+
+  function even(x) {
+    match x {
+    | Zero => return True;
+    | Succ[y] => return odd(y);
+    };
+  }
+
+  function odd(x) {
+    match x {
+    | Zero => return False;
+    | Succ[y] => return even(y);
     };
   }
 }

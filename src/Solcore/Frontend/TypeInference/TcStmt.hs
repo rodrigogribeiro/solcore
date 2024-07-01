@@ -48,7 +48,9 @@ tcStmt m@(Return e)
       t' <- askReturnTy
       s <- unify t t' `wrapError` m
       info ["unify: ", pretty t, " with ", pretty t']
-      setReturnTy (apply s t')
+      setReturnTy (apply s t)
+      s1 <- getSubst
+      info ["subst:", pretty s1]
       pure (apply s ps, False)
 tcStmt (Match es eqns) 
   = do 

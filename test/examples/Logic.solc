@@ -1,0 +1,11 @@
+contract Logic {
+  data Bool = True | False 
+
+  function and(x, y) {
+    match x, y {
+    | False, _ => return False ; 
+    | True , _ => return y ; 
+    };
+  }
+
+}

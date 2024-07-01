@@ -15,7 +15,8 @@ varBind :: MonadError String m => Tyvar -> Ty -> m Subst
 varBind v t
   | v `elem` fv t = infiniteTyErr v t 
   | t == TyVar v = return mempty 
-  | otherwise = return (v +-> t)
+  | otherwise = do 
+    return (v +-> t)
 
 -- type matching 
 

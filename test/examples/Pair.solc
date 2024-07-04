@@ -1,21 +1,21 @@
-contract Pair [a,b] {
-  fst : a ;
-  snd : b ;
+contract PairModule {
+  data Pair[a,b] = Pair[a,b]
 
-  constructor (x,y) {
-    fst = x;
-    snd = y;
+  function fst (x) {
+    match x {
+    | Pair[a,_] => return a;
+    };
   }
 
-  function setFst (x) {
-    fst = x;
+  function snd(x) {
+    match x {
+    | Pair[_,b] => return b;
+    };
   }
 
-  function getFst() {
-    return fst;
-  }
-
-  function getSnd() {
-    return snd;
+  function uncurry(f,x) {
+    match x {
+    | Pair[a,b] => return f(a,b);
+    };
   }
 }

@@ -4,7 +4,7 @@ import Control.Monad
 
 import Options.Applicative 
 
-import Solcore.Desugarer.MatchCompiler 
+-- import Solcore.Desugarer.MatchCompiler 
 import Solcore.Frontend.Lexer.SolcoreLexer
 import Solcore.Frontend.Parser.SolcoreParser
 import Solcore.Frontend.Pretty.SolcorePretty
@@ -22,14 +22,16 @@ pipeline = do
     Right ast ->
       case typeInfer ast of
         Left err -> putStrLn err 
-        Right env -> 
-          do 
-            when (enableLog env) (mapM_ putStrLn (reverse $ logs env))
+        Right (c', env) -> do 
+                putStrLn $ unlines $ reverse $ logs env   
+                putStrLn $ pretty c'
+{-          do 
+            when (enableLog env) (mapM_ putStrLn (logs env))
             res <- matchCompiler ast 
             case res of 
               Right r -> putStrLn $ pretty r 
               Left err -> putStrLn err 
-
+-}
 -- parsing command line arguments 
 
 data Option 

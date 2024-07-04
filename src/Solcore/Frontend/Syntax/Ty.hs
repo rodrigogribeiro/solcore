@@ -1,18 +1,20 @@
 module Solcore.Frontend.Syntax.Ty where 
 
+
+import Data.Generics (Data, Typeable)
 import Solcore.Frontend.Syntax.Name 
 
 -- basic typing infrastructure 
 
 data Tyvar 
   = TVar Name 
-  deriving (Eq, Ord, Show)
+  deriving (Eq, Ord, Show, Data, Typeable)
     
 
 data Ty 
   = TyVar Tyvar      -- type variable 
   | TyCon Name [Ty]  -- type constructor 
-  deriving (Eq, Ord, Show)
+  deriving (Eq, Ord, Show, Data, Typeable)
 
 infixr 5 :-> 
 
@@ -42,14 +44,14 @@ data Pred = InCls {
             , predParams :: [Ty]
             } 
           | Ty :~: Ty 
-          deriving (Eq, Ord, Show)
+          deriving (Eq, Ord, Show, Data, Typeable)
 
 
 -- qualified types 
 
 data Qual t 
   = [Pred] :=> t 
-    deriving (Eq, Ord, Show)
+    deriving (Eq, Ord, Show, Data, Typeable)
 
 infix 2 :=> 
 
@@ -57,7 +59,7 @@ infix 2 :=>
 
 data Scheme 
   = Forall [Tyvar] (Qual Ty) 
-    deriving (Eq, Ord, Show)
+    deriving (Eq, Ord, Show, Data, Typeable)
 
 monotype :: Ty -> Scheme 
 monotype t = Forall [] ([] :=> t)

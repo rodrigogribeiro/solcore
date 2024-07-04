@@ -28,7 +28,7 @@ instance Pretty a => Pretty (Qual a) where
 instance Pretty ([Pred],Ty) where 
   ppr (x, y) = ppr (x :=> y)
 
-instance Pretty CompUnit where 
+instance Pretty a => Pretty (CompUnit a) where 
   ppr (CompUnit imps cs)
     = vcat (map ppr imps ++ map ppr cs)
 
@@ -36,7 +36,7 @@ instance Pretty Import where
   ppr (Import qn) 
     = text "import" <+> ppr qn <+> semi
 
-instance Pretty Contract where 
+instance Pretty a => Pretty (Contract a) where 
   ppr (Contract n ts ds)
     = text "contract" <+> 
       ppr n <+> 
@@ -45,7 +45,7 @@ instance Pretty Contract where
       nest 3 (vcat (map ppr ds)) $$ 
       rbrace 
 
-instance Pretty Decl where 
+instance Pretty a => Pretty (Decl a) where 
   ppr (DataDecl dt)
     = ppr dt 
   ppr (SymDecl ts)
@@ -63,7 +63,7 @@ instance Pretty Decl where
   ppr (ConstrDecl c)
     = ppr c 
 
-instance Pretty Constructor where 
+instance Pretty a => Pretty (Constructor a) where 
   ppr (Constructor ps bd)
     =  text "constructor" <+> 
        pprParams ps <+> 
@@ -100,7 +100,7 @@ instance Pretty TySym where
            , ppr ty 
            ]
 
-instance Pretty Class where 
+instance Pretty a => Pretty (Class a) where 
   ppr (Class ps n vs v sigs)
     = text "class " <+> 
       pprContext True ps <+> 
@@ -111,11 +111,11 @@ instance Pretty Class where
       pprSignatures sigs $$  
       rbrace 
 
-pprSignatures :: [Signature] -> Doc 
+pprSignatures :: Pretty a => [Signature a] -> Doc 
 pprSignatures 
   = vcat . map ppr
 
-instance Pretty Signature where 
+instance Pretty a => Pretty (Signature a) where 
   ppr (Signature n ctx ps ty)
     = text "function" <+> 
       ppr n           <+>
@@ -123,7 +123,7 @@ instance Pretty Signature where
       pprParams ps    <+> 
       pprRetTy ty   
 
-instance Pretty Instance where 
+instance Pretty a => Pretty (Instance a) where 
   ppr (Instance ctx n tys ty funs)
     = text "instance" <+> 
       pprContext True ctx  <+> 
@@ -143,15 +143,15 @@ pprContext b ps
 instance Pretty [Pred] where 
   ppr = hsep . map ppr 
 
-pprFunBlock :: [FunDef] -> Doc 
+pprFunBlock :: Pretty a => [FunDef a] -> Doc 
 pprFunBlock 
   = vcat . map ppr
 
-instance Pretty Field where 
+instance Pretty a => Pretty (Field a) where 
   ppr (Field n ty e)
     = ppr n <+> colon <+> (ppr ty) <+> pprInitOpt e
 
-instance Pretty FunDef where 
+instance Pretty a => Pretty (FunDef a) where 
   ppr (FunDef sig bd)
     = ppr sig <+>
       lbrace $$ 
@@ -162,17 +162,16 @@ pprRetTy :: Maybe Ty -> Doc
 pprRetTy (Just t) = text "->" <+> ppr t
 pprRetTy Nothing = empty 
 
-pprParams :: [Param] -> Doc  
+pprParams :: Pretty a => [Param a] -> Doc  
 pprParams = parens . commaSep . map ppr
 
-instance Pretty Param where 
+instance Pretty a => Pretty (Param a) where 
   ppr (Typed n ty) 
-    = ppr n <+> colon <+> ppr ty
+    = ppr n
   ppr (Untyped n)
     = ppr n
 
-
-instance Pretty Stmt where 
+instance Pretty a => Pretty (Stmt a) where 
   ppr (n := e) 
     = ppr n <+> equals <+> ppr e <+> semi 
   ppr (Let n ty m)
@@ -188,7 +187,7 @@ instance Pretty Stmt where
       vcat (map ppr eqns) $$ 
       rbrace 
 
-instance Pretty Equation where 
+instance Pretty a => Pretty (Equation a) where 
   ppr (p,ss) 
     = text "|" <+> commaSep (map ppr p) <+> text "=>" $$ 
       nest 3 (vcat (map ppr ss))
@@ -197,11 +196,11 @@ pprOptTy :: Maybe Ty -> Doc
 pprOptTy Nothing = empty 
 pprOptTy (Just t) = ppr t 
 
-pprInitOpt :: Maybe Exp -> Doc
+pprInitOpt :: Pretty a => Maybe (Exp a) -> Doc
 pprInitOpt Nothing = semi
 pprInitOpt (Just e) = equals <+> ppr e <+> semi 
 
-instance Pretty Exp where 
+instance Pretty a => Pretty (Exp a) where 
   ppr (Var v) = ppr v 
   ppr (Con n es) 
     = ppr n <> (brackets $ commaSep $ map ppr es)
@@ -215,7 +214,7 @@ instance Pretty Exp where
       nest 3 (vcat (map ppr bd)) $$
       rbrace
 
-pprE :: Maybe Exp -> Doc  
+pprE :: Pretty a => Maybe (Exp a) -> Doc  
 pprE Nothing = ""
 pprE (Just e) = ppr e <> text "."
 
@@ -263,7 +262,7 @@ instance Pretty Ty where
   ppr (t1@(_ :-> _) :-> t2) 
     = parens (ppr t1) <+> text "->" <+> ppr t2
   ppr (t1 :-> t2) 
-    = ppr t1 <+> (text " ->") <+> ppr t2
+    = ppr t1 <+> (text "->") <+> ppr t2
   ppr (TyCon n ts)
     = ppr n <> (pprTyParams ts)
 

@@ -35,6 +35,11 @@ class HasType a where
   apply :: Subst -> a -> a 
   fv :: a -> [Tyvar]
 
+instance (HasType b, HasType c) => HasType (a,b,c) where 
+  apply s (z,x,y) = let (x',y') = apply s (x,y)
+                    in (z,x',y')
+  fv (_,x,y) = fv (x,y)
+
 instance (HasType a, HasType b) => HasType (a,b) where 
   apply s (x,y) = (apply s x, apply s y)
   fv (x,y) = fv x `union` fv y

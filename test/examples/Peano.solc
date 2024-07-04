@@ -2,34 +2,10 @@ contract Peano {
   data Nat = Zero | Succ[Nat]
   data Bool = True | False 
 
-  function add (n, m) {
-    match n { 
-    | Zero => 
-        return m; 
-     
-    | Succ[n1] => 
-        return Succ[add(n1,m)];
-    };
-  }
-
-  function not(x) {
-    match x {
-    | True => return False; 
-    | _    => return True;
-    };
-  }
-
-  function even(x) {
-    match x {
-    | Zero => return True;
-    | Succ[y] => return odd(y);
-    };
-  }
-
-  function odd(x) {
-    match x {
-    | Zero => return False;
-    | Succ[y] => return even(y);
+  function natInd (step, v, n) {
+    match n {
+    | Zero => return v ;
+    | Succ[m] => return step(m, natInd(step,v,m));
     };
   }
 }

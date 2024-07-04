@@ -1,38 +1,40 @@
 module Solcore.Frontend.Syntax.Stmt where 
 
+import Data.Generics (Data, Typeable)
+
 import Solcore.Frontend.Syntax.Name
 import Solcore.Frontend.Syntax.Ty
 
 -- definition of statements 
 
-type Equation = ([Pat], [Stmt])
-type Equations = [Equation]
+type Equation a = ([Pat], [Stmt a])
+type Equations a = [Equation a]
 
-data Stmt 
-  = Exp := Exp                -- assignment
-  | Let Name (Maybe Ty) (Maybe Exp) -- local variable  
-  | StmtExp Exp               -- expression level statements
-  | Return Exp                -- return statements
-  | Match [Exp] Equations     -- pattern matching 
-  deriving (Eq, Ord, Show)
+data Stmt a
+  = (Exp a) := (Exp a)                  -- assignment
+  | Let Name (Maybe Ty) (Maybe (Exp a)) -- local variable  
+  | StmtExp (Exp a)                     -- expression level statements
+  | Return (Exp a)                      -- return statements
+  | Match [Exp a] (Equations a)         -- pattern matching 
+  deriving (Eq, Ord, Show, Data, Typeable)
 
-type Body = [Stmt]
+type Body a = [Stmt a]
 
-data Param 
-  = Typed Name Ty 
-  | Untyped Name 
-  deriving (Eq, Ord, Show)
+data Param a 
+  = Typed a Ty 
+  | Untyped a 
+  deriving (Eq, Ord, Show, Data, Typeable)
 
 -- definition of the expression syntax
 
-data Exp 
-  = Var Name                       -- variable  
-  | Con Name [Exp]                 -- data type constructor
-  | FieldAccess Exp Name           -- field access  
-  | Lit Literal                    -- literal 
-  | Call (Maybe Exp) Name [Exp]    -- function call
-  | Lam [Param] Body               -- lambda-abstraction
-  deriving (Eq, Ord, Show)
+data Exp a 
+  = Var a                              -- variable  
+  | Con Name [Exp a]                   -- data type constructor
+  | FieldAccess (Exp a) Name           -- field access  
+  | Lit Literal                        -- literal 
+  | Call (Maybe (Exp a)) Name [Exp a]  -- function call
+  | Lam [Param a] (Body a)               -- lambda-abstraction
+  deriving (Eq, Ord, Show, Data, Typeable)
 
 -- pattern matching equations 
 
@@ -41,11 +43,11 @@ data Pat
   | PCon Name [Pat] 
   | PWildcard 
   | PLit Literal 
-  deriving (Eq, Ord, Show)
+  deriving (Eq, Ord, Show, Data, Typeable)
 
 -- definition of literals 
 
 data Literal 
   = IntLit Integer
   | StrLit String
-  deriving (Eq, Ord, Show)
+  deriving (Eq, Ord, Show, Data, Typeable)

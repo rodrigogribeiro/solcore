@@ -3,86 +3,99 @@ module Solcore.Frontend.TypeInference.TcStmt where
 import Control.Monad
 import Control.Monad.Except
 
+import Data.Generics
 import Data.List
 
 import Solcore.Frontend.Pretty.SolcorePretty
 import Solcore.Frontend.Syntax
+import Solcore.Frontend.TypeInference.Id
 import Solcore.Frontend.TypeInference.TcEnv
 import Solcore.Frontend.TypeInference.TcMonad
 import Solcore.Frontend.TypeInference.TcSubst
 import Solcore.Frontend.TypeInference.TcUnify
 import Solcore.Primitives.Primitives
 
+import Text.PrettyPrint.HughesPJ
+
 -- type inference for statements
 
-tcStmt :: Stmt -> TcM ([Pred], Ty)
+type Infer f = f Name -> TcM (f Id, [Pred], Ty)
+
+tcStmt :: Infer Stmt 
 tcStmt e@(lhs := rhs) 
   = do 
-      (ps1, t1) <- tcExp lhs
-      info ["Infered type for ",pretty lhs, " is ", pretty (ps1 :=> t1)]
-      (ps2, t2) <- tcExp rhs 
-      info ["Infered type for ", pretty rhs, " is ", pretty (ps2 :=> t2)]
+      (lhs1, ps1, t1) <- tcExp lhs
+      (rhs1, ps2, t2) <- tcExp rhs 
       s <- unify t1 t2 `wrapError` e
       extSubst s
-      pure (apply s (ps1 ++ ps2), unit)
+      pure (lhs1 := rhs1, apply s (ps1 ++ ps2), unit)
 tcStmt e@(Let n mt me)
   = do 
-      (psf, tf) <- case (mt, me) of
+      (me', psf, tf) <- case (mt, me) of
                       (Just t, Just e) -> do 
-                        (ps1,t1) <- tcExp e 
+                        (e', ps1,t1) <- tcExp e 
                         s <- unify t t1 `wrapError` e
-                        pure (apply s ps1, apply s t1)
+                        pure (Just e', apply s ps1, apply s t1)
                       (Just t, Nothing) -> do 
-                        return ([], t)
-                      (Nothing, Just e) -> tcExp e 
+                        return (Nothing, [], t)
+                      (Nothing, Just e) -> do 
+                        (e', ps, t1) <- tcExp e 
+                        return (Just e', ps, t1)
                       (Nothing, Nothing) -> 
-                        ([],) <$> freshTyVar
+                        (Nothing, [],) <$> freshTyVar
       extEnv n (monotype $ stack tf) 
-      pure (psf, unit)
+      pure (Let n mt me', psf, unit)
 tcStmt (StmtExp e)
-  = tcExp e 
+  = do 
+      (e', ps', t') <- tcExp e 
+      pure (StmtExp e', ps', t')
 tcStmt m@(Return e)
   = do 
-      (ps, t) <- tcExp e 
-      pure (ps, t)
-tcStmt (Match es eqns) 
-  = do 
-      qts <- mapM tcExp es
+      (e', ps, t) <- tcExp e
+      pure (Return e', ps, t)
+tcStmt (Match es eqns) -- FIXME bug here  
+  = do
       resTy <- freshTyVar
-      tcEquations qts resTy eqns
+      (es', pss', ts') <- unzip3 <$> mapM tcExp es
+      (eqns', pss1) <- tcEquations ts' resTy eqns
+      s <- getSubst 
+      withCurrentSubst (Match es' eqns', concat (pss1 : pss'), resTy)
 
-tcEquations :: [([Pred], Ty)] -> Ty -> Equations -> TcM ([Pred], Ty)
-tcEquations qts resTy eqns 
-  = do 
-      (ps, ts) <- unzip <$> mapM (tcEquation qts resTy) eqns
-      s <- getSubst
-      info ["Types infered:", unlines $ map pretty ts]
-      return (apply s (concat ps, resTy))
+tcEquations :: [Ty] -> Ty -> Equations Name -> TcM (Equations Id, [Pred])
+tcEquations _ _ [] = pure ([], [])
+tcEquations ts resTy (eqn : eqns)  
+  = do
+      (eqn', ps, t) <- tcEquation ts eqn
+      unify t resTy
+      ts' <- withCurrentSubst ts 
+      resTy' <- withCurrentSubst resTy 
+      (eqns', ps') <- tcEquations ts' resTy' eqns 
+      pure (eqn' : eqns', ps ++ ps')
 
-tcEquation :: [([Pred], Ty)] -> Ty -> Equation -> TcM ([Pred], Ty)
-tcEquation qts resTy (ps, ss) 
-  = do 
-      (pss, lctx) <- tcPats qts ps 
-      (pss', t) <- withLocalCtx lctx (tcBody ss)
-      s <- unify t resTy 
-      pure (apply s (pss ++ pss', t))
+tcEquation :: [Ty] -> Equation Name -> TcM (Equation Id, [Pred], Ty)
+tcEquation ts (ps, ss) 
+  = withLocalEnv do 
+      lctx <- tcPats ts ps 
+      mapM_ (uncurry extEnv) lctx
+      (ss', pss', t) <- tcBody ss
+      withCurrentSubst ((ps, ss'), pss', t)
 
-tcPats :: [([Pred],Ty)] -> [Pat] -> TcM ([Pred], [(Name,Scheme)])
-tcPats qts ps 
-  | length qts /= length ps = wrongPatternNumber qts ps
+tcPats :: [Ty] -> [Pat] -> TcM [(Name,Scheme)]
+tcPats ts ps 
+  | length ts /= length ps = wrongPatternNumber ts ps
   | otherwise = do 
-    (pss,ctxs) <- unzip <$> mapM (\(p,t) -> tcPat p t) 
-                                 (zip qts ps)
-    pure (concat pss, concat ctxs)
+      ctxs <- mapM (\(t, p) -> tcPat t p) (zip ts ps)
+      pure (concat ctxs)
 
 
-tcPat :: ([Pred], Ty) -> Pat -> TcM ([Pred], [(Name, Scheme)])
-tcPat (ps, t) p 
+tcPat :: Ty -> Pat -> TcM [(Name, Scheme)]
+tcPat t p 
   = do 
-      (t', pctx) <- tiPat p 
-      s <- unify t t' 
+      (t', pctx) <- tiPat p
+      s <- unify t t'
+      info ["Unifying ", pretty t, " with ", pretty t', " for pat:", pretty p]
       let pctx' = map (\ (n,t) -> (n, monotype $ apply s t)) pctx
-      pure (apply s ps, pctx')
+      pure pctx'
 
 tiPat :: Pat -> TcM (Ty, [(Name, Ty)])
 tiPat (PVar n) 
@@ -92,13 +105,13 @@ tiPat (PVar n)
 tiPat p@(PCon n ps)
   = do
       -- typing parameters 
-      (ts, lctxs) <- unzip <$> mapM tiPat ps 
+      (ts, lctxs) <- unzip <$> mapM tiPat ps
       -- asking type from environment 
       st <- askEnv n
       (ps' :=> tc) <- freshInst st
       tr <- freshTyVar
       s <- unify tc (funtype ts tr) `wrapError` p
-      let t' = apply s tr  
+      let t' = apply s tr 
       tn <- typeName t'   
       checkConstr tn n 
       let lctx' = map (\(n',t') -> (n', apply s t')) (concat lctxs)
@@ -116,18 +129,20 @@ tcLit :: Literal -> TcM Ty
 tcLit (IntLit _) = return word
 tcLit (StrLit _) = return string
 
-tcExp :: Exp -> TcM ([Pred], Ty)
+tcExp :: Infer Exp 
 tcExp (Lit l) 
-  = ([],) <$> tcLit l
+  = do 
+      t <- tcLit l
+      pure (Lit l, [], t)
 tcExp (Var n) 
   = do 
       s <- askEnv n 
       (ps :=> t) <- freshInst s 
-      pure (ps, t)
+      pure (Var (Id n t), ps, t)
 tcExp e@(Con n es)
   = do
       -- typing parameters 
-      (pss, ts) <- unzip <$> mapM tcExp es 
+      (es', pss, ts) <- unzip3 <$> mapM tcExp es 
       -- getting the type from the environment 
       sch <- askEnv n 
       (ps :=> t) <- freshInst sch
@@ -138,75 +153,94 @@ tcExp e@(Con n es)
       -- checking if the constructor belongs to type tn 
       checkConstr tn n
       let ps' = concat (ps : pss)
-      pure (apply s (ps', t'))
+      pure (Con n es', apply s ps', apply s t')
 tcExp (FieldAccess e n) 
   = do
       -- infering expression type 
-      (ps,t) <- tcExp e
+      (e', ps,t) <- tcExp e
       -- getting type name 
       tn <- typeName t 
       -- getting field type 
       s <- askField tn n 
       (ps' :=> t') <- freshInst s 
-      pure (ps ++ ps', t')
+      pure (FieldAccess e' n, ps ++ ps', t')
 tcExp (Call me n args)
   = tcCall me n args 
 tcExp e@(Lam args bd)
   = withLocalSubst do 
-      ts' <- mapM addArg args 
-      (ps,t') <- tcBody bd 
+      (args', ts') <- unzip <$> mapM addArg args 
+      (bd',ps,t') <- tcBody bd 
       s <- getSubst
-      let res = apply s (ps, funtype ts' t')
-          qt = apply s (ps :=> (funtype ts' t'))
-      info ["Infered type for lambda:\n", pretty e, "\n:\n", pretty qt]
-      pure res
+      let (ps1,t1) = apply s (ps, funtype ts' t')
+          e' = everywhere (mkT (applyI s)) (Lam args' bd')
+      pure (e', ps1, t1)
 
-tcBody :: Body -> TcM ([Pred], Ty)
-tcBody [] = pure ([], unit)
-tcBody [s] = tcStmt s 
-tcBody (s : ss) = tcStmt s >> tcBody ss 
+applyI :: Subst -> Id -> Id 
+applyI s = apply s
 
-tcCall :: Maybe Exp -> Name -> [Exp] -> TcM ([Pred], Ty)
+tcBody :: Body Name -> TcM (Body Id, [Pred], Ty)
+tcBody [] = pure ([], [], unit)
+tcBody [s] 
+  = do 
+      (s', ps', t') <- tcStmt s 
+      pure ([s'], ps', t')
+tcBody (s : ss) 
+  = do 
+      (s', ps', t') <- tcStmt s
+      (bd', ps1, t1) <- tcBody ss 
+      pure (s' : bd', ps' ++ ps1, t1)
+
+tcCall :: Maybe (Exp Name) -> Name -> [Exp Name] -> TcM (Exp Id, [Pred], Ty)
 tcCall Nothing n args 
   = do 
       s <- askEnv n 
       (ps :=> t) <- freshInst s
-      t' <- freshTyVar 
-      rss <- mapM tcExp args
-      s' <- unify t (funtype (map snd rss) t')
-      let ps' = foldr (union . fst) [] rss `union` ps
-      pure (apply s' ps', apply s' t')
+      t' <- freshTyVar
+      (es', pss', ts') <- unzip3 <$> mapM tcExp args
+      s' <- unify t (foldr (:->) t' ts')
+      info ["Call:", pretty n," unify:", pretty $ apply s' t, " with ", pretty (apply s' $ foldr (:->) t' ts')]
+      let ps' = foldr union [] (ps : pss')
+      withCurrentSubst (Call Nothing n es', ps', t')
 tcCall (Just e) n args 
   = do 
-      (ps, ct) <- tcExp e
+      (e', ps , ct) <- tcExp e
       s <- askEnv n 
-      (ps :=> t) <- freshInst s
+      (ps1 :=> t) <- freshInst s
       t' <- freshTyVar
-      rss <- mapM tcExp args 
-      s' <- unify t (funtype (map snd rss) t')
-      let ps' = foldr (union . fst) [] rss `union` ps 
-      pure (apply s' ps', apply s' t')
+      (es', pss', ts') <- unzip3 <$> mapM tcExp args 
+      s' <- unify t (foldr (:->) t' ts')
+      let ps' = foldr union [] ((ps ++ ps1) : pss')
+      withCurrentSubst (Call (Just e') n es', ps', t')
 
-addArg :: Param -> TcM Ty 
-addArg (Typed n t) 
+addArg :: Param Name -> TcM (Param Id, Ty) 
+addArg p@(Typed n t) 
   = do 
       extEnv n (monotype t)
-      pure t 
+      pure (Typed (Id n t) t, t) 
 addArg (Untyped n) 
   = do 
       t <- freshTyVar
       extEnv n (monotype t)
-      pure t
+      pure (Typed (Id n t) t, t)
 
-tcParam :: Param -> TcM Param
-tcParam p@(Typed _ _) = pure p
-tcParam (Untyped n) = Typed n <$> freshTyVar
+tcParam :: Param Name -> TcM (Param Id)
+tcParam (Typed n t) 
+  = pure $ Typed (Id n t) t
+tcParam (Untyped n) 
+  = do 
+      t <- freshTyVar
+      pure (Typed (Id n t) t)
 
 typeName :: Ty -> TcM Name 
 typeName (TyCon n _) = pure n
 typeName t = throwError $ unlines ["Expected type, but found:"
                                   , pretty t
                                   ]
+
+instance Pretty (Param Id) where 
+  ppr (Typed (Id n t) _) = ppr n <+> text "::" <+> ppr t
+  ppr (Untyped (Id n t)) = ppr n <+> text "::" <+> ppr t
+
 -- errors 
 
 expectedFunction :: Ty -> TcM a
@@ -215,7 +249,7 @@ expectedFunction t
                          , pretty t 
                          ]
 
-wrongPatternNumber :: [([Pred],Ty)] -> [Pat] -> TcM a
+wrongPatternNumber :: [Ty] -> [Pat] -> TcM a
 wrongPatternNumber qts ps 
   = throwError $ unlines [ "Wrong number of patterns in:"
                          , unwords (map pretty ps)

@@ -10,6 +10,7 @@ import Data.Either
 import Data.List
 import qualified Data.List.NonEmpty as L
 
+import Solcore.Desugarer.ReplaceWildcard
 import Solcore.Frontend.Pretty.SolcorePretty
 import Solcore.Frontend.Syntax.Contract
 import Solcore.Frontend.Syntax.Stmt 
@@ -50,41 +51,6 @@ matchCompilerContract (Contract n ts ds)
       case res of 
         (Left err, _) -> return $ Left err 
         (Right ds', fs) -> return $ Right $ Contract n ts (ds' ++ map FunDecl fs)
-
--- Compiler monad infra 
-
-type CompilerM a 
-  = ReaderT String (ExceptT String 
-                   (WriterT [FunDef] 
-                   (StateT Int IO))) a
-
-mkPrefix :: [Name] -> String 
-mkPrefix = intercalate "_" . map unName 
-
-inc :: CompilerM Int 
-inc = do 
-  i <- get 
-  put (i + 1)
-  return i
-
-freshName :: CompilerM Name 
-freshName 
-  = do 
-        n <- inc 
-        -- pre <- ask 
-        return (Name ("var_" ++ show n))
-
-freshExpVar :: CompilerM Exp 
-freshExpVar 
-  = Var <$> freshName 
-
-freshPVar :: CompilerM Pat 
-freshPVar 
-  = PVar <$> freshName
-
-runCompilerM :: [Name] -> CompilerM a -> IO (Either String a, [FunDef])
-runCompilerM ns m
-  = evalStateT (runWriterT (runExceptT (runReaderT m (mkPrefix ns)))) 0
 
 class Compile a where 
   type Res a 
@@ -351,82 +317,6 @@ instance Apply Pat where
   vars (PVar v) = [v]
   vars (PCon _ ps) = foldr (union . vars) [] ps 
   vars _ = []
-
--- replacing wildcards by fresh pattern variables 
-
-class ReplaceWildcard a where 
-  replace :: a -> CompilerM a 
-
-instance ReplaceWildcard a => ReplaceWildcard [a] where 
-  replace = mapM replace
-
-instance ( ReplaceWildcard a
-         , ReplaceWildcard b) => ReplaceWildcard (a,b) where 
-  replace (a,b) = (,) <$> replace a <*> replace b
-
-instance ReplaceWildcard a => ReplaceWildcard (Maybe a) where 
-  replace Nothing  = pure Nothing 
-  replace (Just e) = Just <$> replace e 
-
-instance ReplaceWildcard Pat where 
-  replace v@(PVar _) = return v 
-  replace (PCon n ps)
-    = PCon n <$> replace ps
-  replace PWildcard
-    = freshPVar
-  replace p@(PLit _)
-    = return p 
-
-instance ReplaceWildcard Exp where 
-  replace v@(Var _) = return v 
-  replace (Con n es) 
-    = Con n <$> replace es 
-  replace (FieldAccess e n)
-    = (flip FieldAccess n) <$> replace e 
-  replace e@(Lit _) = return e 
-  replace (Call me n es)
-    = Call <$> (replace me) <*> 
-               pure n <*> 
-               replace es
-  replace (Lam args bd) 
-    = Lam args <$> replace bd
-
-instance ReplaceWildcard Stmt where 
-  replace (e1 := e2) 
-    = (e1 :=) <$> replace e2 
-  replace (Let n t me)
-    = Let n t <$> replace me 
-  replace (StmtExp e)
-    = StmtExp <$> replace e 
-  replace (Return e)
-    = Return <$> replace e
-  replace (Match es eqns)
-    = Match <$> replace es <*> replace eqns
-
-instance ReplaceWildcard FunDef where 
-  replace (FunDef sig bd)
-    = FunDef sig <$> replace bd
-
-instance ReplaceWildcard Constructor where 
-  replace (Constructor ps bd)
-    = Constructor ps <$> replace bd
-
-instance ReplaceWildcard Instance where 
-  replace (Instance ps n ts m funs)
-    = Instance ps n ts m <$> replace funs
-
-instance ReplaceWildcard Decl where 
-  replace (FunDecl fd) 
-    = FunDecl <$> replace fd 
-  replace (ConstrDecl c)
-    = ConstrDecl <$> replace c 
-  replace (InstDecl inst)
-    = InstDecl <$> replace inst 
-  replace d = return d 
-
-instance ReplaceWildcard Contract where 
-  replace (Contract n ts decls)
-    = Contract n ts <$> replace decls 
 
 -- infrastructure for the algorithm 
 

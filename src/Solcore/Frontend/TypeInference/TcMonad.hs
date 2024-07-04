@@ -79,7 +79,7 @@ withLocalSubst m
       s <- getSubst 
       r <- m 
       modify (\ st -> st {subst = s})
-      pure r
+      pure (apply s r)
 
 clearSubst :: TcM ()
 clearSubst = modify (\ st -> st {subst = mempty})

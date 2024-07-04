@@ -3,34 +3,23 @@ contract ListModule {
   data Bool = True | False
 
 
-  function map (f, xs) {
-    match xs {
-    | Nil => return Nil ; 
-    | Cons[y,ys] => return Cons[f(y), map(f, ys)] ;
+  function foo (f, g, x, y) {
+    return f(x, g(y)) ;
+  }
+
+  function zipWith (f,xs,ys) {
+    match xs, ys { 
+    | Nil, Nil => return Nil ; 
+    | Cons[x1,xs1], Cons[y1,ys1] => 
+      return Cons[f(x1,y1), zipWith(f,xs1,ys1)] ;
     };
   }
 
   function foldr(f, v, xs) {
     match xs {
     | Nil => return v; 
-    | Cons[y,ys] => return f(y, foldr(f,v,ys)) ; 
-    };
-  }
-
-  function sum (xs) {
-    return foldr(lam (x, ac){
-                    return primAddWord(x,ac);
-                 }, 0, xs) ;
-  }
-
-  function filter (p,xs) {
-    match xs {
-    | Nil => return Nil ; 
     | Cons[y,ys] => 
-      match p(y) {
-      | True => return Cons[y, filter(p, ys)] ;
-      | _ => return filter(p,ys) ;
-      } ;
+      return f(y, foldr(f,v,ys)) ; 
     };
   }
 }

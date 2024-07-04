@@ -63,7 +63,7 @@ initTcEnv = TcEnv primCtx
                   mempty 
                   namePool 
                   []
-                  False 
+                  True 
                   True 
                   100
 

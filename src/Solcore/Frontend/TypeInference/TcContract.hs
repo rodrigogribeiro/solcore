@@ -3,11 +3,13 @@ module Solcore.Frontend.TypeInference.TcContract where
 import Control.Monad
 import Control.Monad.Except
 
+import Data.Generics
 import Data.List
 import qualified Data.Map as Map
 
 import Solcore.Frontend.Pretty.SolcorePretty
 import Solcore.Frontend.Syntax
+import Solcore.Frontend.TypeInference.Id
 import Solcore.Frontend.TypeInference.NameSupply
 import Solcore.Frontend.TypeInference.TcEnv
 import Solcore.Frontend.TypeInference.TcMonad
@@ -18,19 +20,19 @@ import Solcore.Primitives.Primitives
 
 -- top level type inference function 
 
-typeInfer :: CompUnit -> Either String TcEnv 
+typeInfer :: CompUnit Name -> Either String (CompUnit Id, TcEnv) 
 typeInfer c 
   = case runTcM (tcCompUnit c) initTcEnv of 
       Left err -> Left err 
-      Right (_, env) -> Right env
+      Right c' -> Right c'
 
 -- type inference for a compilation unit 
 
-tcCompUnit :: CompUnit -> TcM ()
+tcCompUnit :: CompUnit Name -> TcM (CompUnit Id)
 tcCompUnit (CompUnit imps cs)
   = do 
       loadImports imps 
-      mapM_ tcContract cs 
+      CompUnit imps <$> mapM tcContract cs 
 
 -- TODO load import information
 
@@ -39,24 +41,29 @@ loadImports _ = return ()
 
 -- type inference for contracts 
 
-tcContract :: Contract -> TcM () 
+tcContract :: Contract Name -> TcM (Contract Id) 
 tcContract c@(Contract n vs decls) 
   = withLocalEnv do
-      info ["Start type inference for:", pretty n]
       initializeEnv c
-      mapM_ tcDecl' decls
+      decls' <- mapM tcDecl' decls
+      pure (Contract n vs decls')
     where 
-      tcDecl' d = clearSubst >> tcDecl d
+      tcDecl' d 
+        = do 
+          clearSubst 
+          d' <- tcDecl d
+          s <- getSubst
+          pure (everywhere (mkT (applyI s)) d')
 
 -- initializing context for a contract
 
-initializeEnv :: Contract -> TcM ()
+initializeEnv :: Contract Name -> TcM ()
 initializeEnv (Contract n vs decls)
   = do 
       setCurrentContract n (length vs) 
       mapM_ checkDecl decls 
 
-checkDecl :: Decl -> TcM ()
+checkDecl :: Decl Name -> TcM ()
 checkDecl (DataDecl dt) 
   = checkDataType dt 
 checkDecl (ClassDecl c)
@@ -66,10 +73,10 @@ checkDecl (InstDecl i)
 checkDecl (FunDecl (FunDef sig _))
   = extSignature sig
 checkDecl (FieldDecl fd)
-  = tcField fd
+  = tcField fd >> return ()
 checkDecl _ = return ()
 
-extSignature :: Signature -> TcM ()
+extSignature :: Signature Name -> TcM ()
 extSignature (Signature n ctx ps t)
   = do
       argTys <- mapM tyParam ps
@@ -77,7 +84,8 @@ extSignature (Signature n ctx ps t)
       let 
         ty = funtype argTys t' 
         vs = fv (ctx :=> ty)
-      sch <- generalize (ctx, ty) 
+      sch <- generalize (ctx, ty)
+      info ["Function:", pretty n, " - type:", pretty sch]
       extEnv n sch
 
 -- including contructors on environment
@@ -96,69 +104,79 @@ checkDataType (DataTy n vs constrs)
 
 -- type inference for declarations
 
-tcDecl :: Decl -> TcM ()
-tcDecl (FieldDecl fd) = tcField fd
-tcDecl (InstDecl id) = tcInstance id 
-tcDecl d@(FunDecl _) = tcBindGroup [d]
-tcDecl (MutualDecl ds) = tcBindGroup ds 
-tcDecl (ConstrDecl cd) = tcConstructor cd 
-tcDecl _ = return ()
+tcDecl :: Decl Name -> TcM (Decl Id)
+tcDecl (FieldDecl fd) = FieldDecl <$> tcField fd
+tcDecl (InstDecl id) = InstDecl <$> tcInstance id 
+tcDecl d@(FunDecl _) 
+  = do 
+      d' <- tcBindGroup [d]
+      case d' of 
+        [] -> throwError "Impossible! Empty function binding!"
+        (x : _) -> pure x
+tcDecl (MutualDecl ds) = MutualDecl <$> tcBindGroup ds 
+tcDecl (ConstrDecl cd) = ConstrDecl <$> tcConstructor cd 
+tcDecl (DataDecl d) = pure (DataDecl d)
+tcDecl (SymDecl d) = pure (SymDecl d)
 
 -- type checking fields
 
-tcField :: Field -> TcM ()
+tcField :: Field Name -> TcM (Field Id)
 tcField d@(Field n t (Just e)) 
   = do
       -- FIXME: Should we return the constraints?
-      (ps', t') <- tcExp e 
+      (e', ps', t') <- tcExp e 
       s <- mgu t t' `wrapError` d 
       extEnv n (monotype t)
-      return () 
-tcField (Field n t _) = extEnv n (monotype t)
+      return (Field n t (Just e')) 
+tcField (Field n t _) 
+  = do 
+      extEnv n (monotype t)
+      pure (Field n t Nothing)
 
 -- type checking instance body 
 
-tcInstance :: Instance -> TcM ()
-tcInstance (Instance _ _ _ _ funs) 
-  = mapM_ tcFunDef funs
+tcInstance :: Instance Name -> TcM (Instance Id)
+tcInstance (Instance ctx n ts t funs) 
+  = do 
+      (funs', _, _) <- unzip3 <$> mapM tcFunDef funs
+      pure (Instance ctx n ts t funs')
 
 -- type checking binding groups
 
-tcBindGroup :: [Decl] -> TcM ()
+tcBindGroup :: [Decl Name] -> TcM [Decl Id]
 tcBindGroup binds 
   = do
-      info ["Starting typing bindgroup"]
       funs <- mapM scanFun binds 
-      qts <- mapM tcFunDef funs
+      (funs', pss', ts') <- unzip3 <$> mapM tcFunDef funs
       s <- getSubst
-      info ["Current subst: ", pretty s]
-      qts' <- withCurrentSubst qts
-      info ["Infered types:", unlines $ map pretty qts']
+      qts' <- withCurrentSubst (zip pss' ts')
       schs <- mapM generalize qts'
-      info ["Generalize scheme:", unlines $ map pretty schs]
       let names = map (sigName . funSignature) funs 
-          results = zip names schs 
+          results = zip names schs
+      info ["Infered types:", unlines $ map pretty schs]
       mapM_ (uncurry extEnv) results
+      pure (FunDecl <$> funs')
+
 
 -- type checking a single bind
 
-tcFunDef :: FunDef -> TcM ([Pred], Ty)
+tcFunDef :: FunDef Name -> TcM (FunDef Id, [Pred], Ty)
 tcFunDef d@(FunDef sig bd) 
   = withLocalEnv do
-      info ["Type inference for function:", pretty (sigName sig)]
-      ts <- mapM addArg (sigParams sig)
-      (ps1, t') <- tcBody bd
-      info ["Type inference for body:", pretty t']
+      (params', ts) <- unzip <$> mapM addArg (sigParams sig)
+      (bd', ps1, t') <- tcBody bd
       sch <- askEnv (sigName sig) 
       (ps :=> t) <- freshInst sch
       let t1 = foldr (:->) t' ts
-      info ["Infered type before unification:", pretty t1]
-      info ["unify ", pretty t, " with ", pretty t1]
+          sig' = Signature (sigName sig) 
+                           (sigContext sig) 
+                           params' 
+                           (sigReturn sig) 
       s <- unify t t1 `wrapError` d
-      info ["Final type:", pretty (apply s t1)]
-      pure (apply s (ps1 ++ ps, t1))
+      info ["Ending - unifying:", pretty $ apply s t, " with ", pretty t1]
+      withCurrentSubst (FunDef sig' bd', ps1 ++ ps, t1)
 
-scanFun :: Decl -> TcM FunDef 
+scanFun :: Decl Name -> TcM (FunDef Name)
 scanFun (FunDecl (FunDef sig bd)) 
   = flip FunDef bd <$> fillSignature sig 
     where 
@@ -263,21 +281,23 @@ byInstM ce p@(InCls i t as)
 
 -- type checking contract constructors
 
-tcConstructor :: Constructor -> TcM ()
+tcConstructor :: Constructor Name -> TcM (Constructor Id)
 tcConstructor (Constructor ps bd) 
   = do
       -- building parameters for constructors
-      let f (Typed n t) = pure (n, monotype t)
-          f (Untyped n) = ((n,) . monotype) <$> freshTyVar
-      lctx <- mapM f ps 
-      withLocalCtx lctx (mapM_ tcStmt bd) 
+      ps' <- mapM tcParam ps
+      let f (Typed (Id n t) _) = pure (n, monotype t)
+          f (Untyped (Id n _)) = ((n,) . monotype) <$> freshTyVar
+      lctx <- mapM f ps' 
+      (bd', _ ,_) <- withLocalCtx lctx (tcBody bd) 
+      pure (Constructor ps' bd')
   
 -- checking class definitions and adding them to environment 
 
-checkClasses :: [Class] -> TcM ()
+checkClasses :: [Class Name] -> TcM ()
 checkClasses = mapM_ checkClass 
 
-checkClass :: Class -> TcM ()
+checkClass :: Class Name -> TcM ()
 checkClass (Class ps n vs v sigs) 
   = mapM_ checkSignature sigs 
     where
@@ -290,7 +310,7 @@ checkClass (Class ps n vs v sigs)
             addClassMethod (InCls n (TyVar v) (TyVar <$> vs))
                            sig 
 
-addClassMethod :: Pred -> Signature -> TcM ()
+addClassMethod :: Pred -> Signature Name -> TcM ()
 addClassMethod p@(InCls _ _ _) (Signature f _ ps t) 
   = do
       tps <- mapM tyParam ps
@@ -308,10 +328,10 @@ addClassMethod p@(_ :~: _) (Signature n _ _ _)
 
 -- checking instances and adding them in the environment
 
-checkInstances :: [Instance] -> TcM ()
+checkInstances :: [Instance Name] -> TcM ()
 checkInstances = mapM_ checkInstance 
 
-checkInstance :: Instance -> TcM ()
+checkInstance :: Instance Name -> TcM ()
 checkInstance (Instance ctx n ts t funs)
   = do 
       let ipred = InCls n t ts
@@ -359,7 +379,7 @@ checkCoverage cn ts t
           , intercalate ", " (map pretty undetermined)
           ])
 
-checkMethod :: Pred -> FunDef -> TcM () 
+checkMethod :: Pred -> FunDef Name -> TcM () 
 checkMethod ih@(InCls n t ts) (FunDef sig bd) 
   = do
       cn <- askCurrentContract
@@ -379,7 +399,7 @@ checkMethod ih@(InCls n t ts) (FunDef sig bd)
       match it (apply s ty') `wrapError` ih 
       pure ()
 
-tyParam :: Param -> TcM Ty 
+tyParam :: Param Name -> TcM Ty 
 tyParam (Typed _ t) = pure t 
 tyParam (Untyped _) = freshTyVar
 

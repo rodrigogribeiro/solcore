@@ -19,13 +19,13 @@ import Solcore.Frontend.Syntax.Ty
 
 type SCC a = (ExceptT String Identity) a 
 
-sccAnalysis :: CompUnit -> Either String CompUnit 
+sccAnalysis :: CompUnit Name -> Either String (CompUnit Name)
 sccAnalysis m = runIdentity (runExceptT (mkScc m))
 
-mkScc :: CompUnit -> SCC CompUnit
+mkScc :: CompUnit Name -> SCC (CompUnit Name)
 mkScc (CompUnit imps cs) = CompUnit imps <$> mapM sccContract cs
 
-sccContract :: Contract -> SCC Contract
+sccContract :: Contract Name -> SCC (Contract Name)
 sccContract (Contract n ts ds) 
   = do 
       (cgraph, posMap, declMap) <- mkCallGraph decls 
@@ -36,17 +36,22 @@ sccContract (Contract n ts ds)
       -- isDecl (InstDecl _) = True 
       isDecl _ = False 
       (defs, others) = partition isDecl ds
-      fun :: Decl -> [FunDef]
+      fun :: Decl Name -> [FunDef Name]
       fun (FunDecl fd) = [fd]
       -- fun (InstDecl (Instance _ _ _ _ funs)) = funs 
       fun _ = []
       decls = concatMap fun defs
 
-rebuildDecls :: Map Int Name -> Map Name FunDef -> [[Node]] -> SCC [Decl]
+rebuildDecls :: Map Int Name -> 
+                Map Name (FunDef Name) -> 
+                [[Node]] -> 
+                SCC [Decl Name]
 rebuildDecls posMap declMap 
   = mapM (rebuildDecl posMap declMap)
 
-rebuildDecl :: Map Int Name -> Map Name FunDef -> [Node] -> SCC Decl
+rebuildDecl :: Map Int Name -> 
+               Map Name (FunDef Name) -> 
+               [Node] -> SCC (Decl Name)
 rebuildDecl _ _ [] 
   = throwError "Impossible! Empty node list!"
 rebuildDecl pmap dmap [n] 
@@ -54,7 +59,7 @@ rebuildDecl pmap dmap [n]
 rebuildDecl pmap dmap ns 
   = MutualDecl <$> mapM (rebuild pmap dmap) ns
 
-rebuild :: Map Int Name -> Map Name FunDef -> Node -> SCC Decl
+rebuild :: Map Int Name -> Map Name (FunDef Name) -> Node -> SCC (Decl Name)
 rebuild pmap dmap n 
   = case Map.lookup n pmap of
       Just k -> 
@@ -63,7 +68,9 @@ rebuild pmap dmap n
           Nothing -> throwError ("Impossible! Undefined decl:" ++ (unName k)) 
       Nothing -> throwError ("Impossible! Undefined decl:" ++ show n)
 
-mkCallGraph :: [FunDef] -> SCC (Gr Name (), Map Int Name, Map Name FunDef)
+mkCallGraph :: [FunDef Name] -> SCC ( Gr Name ()
+                                    , Map Int Name
+                                    , Map Name (FunDef Name))
 mkCallGraph ds 
   = do
       nodes' <- zip [0..] <$> mapM nameOf ds 
@@ -75,7 +82,7 @@ mkCallGraph ds
       edges' <- mkEdges table valMap 
       pure (mkGraph nodes' edges', Map.fromList nodes', declMap)
 
-mkDeclMap :: [FunDef] -> SCC (Map Name FunDef)
+mkDeclMap :: [FunDef Name] -> SCC (Map Name (FunDef Name))
 mkDeclMap 
   = foldM step Map.empty  
     where 
@@ -95,7 +102,7 @@ mkEdges table pos
                     _      -> err k 
       err v = throwError ("Undefined name:\n" ++ (unName v))
 
-mkCallTable :: [FunDef] -> SCC (Map Name [Name])
+mkCallTable :: [FunDef Name] -> SCC (Map Name [Name])
 mkCallTable ds 
   = do
       emptyTable <- mkEmptyTable ds
@@ -105,15 +112,15 @@ mkCallTable ds
                                 ac  
       pure $ foldr go emptyTable ds  
 
-mkEmptyTable :: [FunDef] -> SCC (Map Name [Name])
+mkEmptyTable :: [FunDef Name] -> SCC (Map Name [Name])
 mkEmptyTable = foldM step Map.empty 
   where 
     step ac d = (\ n -> Map.insert n [] ac) <$> nameOf d
 
-nameOf :: FunDef -> SCC Name  
+nameOf :: FunDef Name -> SCC Name  
 nameOf fd = pure $ funDefName fd 
 
-funDefName :: FunDef -> Name 
+funDefName :: FunDef Name -> Name 
 funDefName (FunDef sig _) 
   = sigName sig
 
@@ -123,19 +130,19 @@ class FreeVars a where
 instance FreeVars a => FreeVars [a] where 
   fv = foldr (union . fv) []
 
-instance FreeVars Exp where
+instance FreeVars (Exp Name) where
   fv (Var n) = [n]
   fv (Con _ es) = fv es 
   fv (FieldAccess e _) = fv e 
   fv (Call (Just e) _ es) = fv (e : es)
   fv _ = []
 
-instance FreeVars Stmt where 
+instance FreeVars (Stmt Name) where 
   fv (_ := e) = fv e 
   fv (Let _ _ (Just e)) = fv e 
   fv (StmtExp e) = fv e 
   fv (Return e) = fv e 
   fv (Match es eqns) = fv es `union` fv eqns 
 
-instance FreeVars Equation where 
+instance FreeVars (Equation Name) where 
   fv = fv . snd 

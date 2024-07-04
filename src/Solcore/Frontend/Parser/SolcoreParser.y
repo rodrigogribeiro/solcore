@@ -54,7 +54,7 @@ import Solcore.Primitives.Primitives
 %%
 -- compilation unit definition 
 
-CompilationUnit :: {CompUnit}
+CompilationUnit :: {CompUnit Name}
 CompilationUnit : ImportList ContractList          { CompUnit $1 $2 } 
 
 ImportList :: { [Import] }
@@ -64,22 +64,22 @@ ImportList : ImportList Import                     { $2 : $1 }
 Import :: { Import }
 Import : 'import' QualName ';'                     { Import (QualName $2) }
 
-ContractList :: {[Contract]}
+ContractList :: {[Contract Name]}
 ContractList : ContractList Contract               { $2 : $1 }
              | {- empty -}                         { [] }
 
 -- contracts 
 
-Contract :: { Contract }
+Contract :: { Contract Name }
 Contract : 'contract' Con OptParam '{' DeclList '}' { Contract $2 $3 $5 }
 
-DeclList :: { [Decl] }
+DeclList :: { [Decl Name] }
 DeclList : Decl DeclList                           { $1 : $2 }
          | {- empty -}                             { [] }
 
 -- declarations 
 
-Decl :: { Decl }
+Decl :: { Decl Name }
 Decl : FieldDef                                    {FieldDecl $1}
      | DataDef                                     {DataDecl $1}
      | SymDef                                      {SymDecl $1}
@@ -90,7 +90,7 @@ Decl : FieldDef                                    {FieldDecl $1}
 
 -- fields 
 
-FieldDef :: { Field }
+FieldDef :: { Field Name }
 FieldDef : Name ':' Type InitOpt ';'               {Field $1 $3 $4}
 
 -- algebraic data types 
@@ -112,11 +112,11 @@ SymDef : 'type' Con OptParam '=' Type               {TySym $2 $3 $5}
 
 -- class definitions 
 
-ClassDef :: { Class }
+ClassDef :: { Class Name }
 ClassDef 
   : 'class' ContextOpt Var ':' Con OptParam ClassBody {Class $2 $5 $6 $3 $7}
 
-ClassBody :: {[Signature]}
+ClassBody :: {[Signature Name]}
 ClassBody : '{' Signatures '}'                     {$2}
 
 OptParam :: { [Tyvar] }
@@ -141,29 +141,29 @@ ConstraintList : Constraint ',' ConstraintList     {$1 : $3}
 Constraint :: { Pred }
 Constraint : Type ':' Con OptTypeParam             {InCls $3 $1 $4} 
 
-Signatures :: { [Signature] }
+Signatures :: { [Signature Name] }
 Signatures : Signature ';' Signatures              {$1 : $3}
            | {- empty -}                           {[]}
 
-Signature :: { Signature }
+Signature :: { Signature Name}
 Signature : 'function' Name ConOpt '(' ParamList ')' OptRetTy   {Signature $2 $3 $5 $7}
 
 ConOpt :: {[Pred]}
 ConOpt : {- empty -}                               {[]}
        | '[' ConstraintList ']'                    {$2}
 
-ParamList :: { [Param] }
+ParamList :: { [Param Name] }
 ParamList : Param                                  {[$1]}
           | Param  ',' ParamList                   {$1 : $3}
           | {- empty -}                            {[]}
 
-Param :: { Param }
+Param :: { Param Name }
 Param : Name ':' Type                              {Typed $1 $3}
       | Name                                       {Untyped $1}
 
 -- instance declarations 
 
-InstDef :: { Instance }
+InstDef :: { Instance Name }
 InstDef : 'instance' ContextOpt Type ':' Con OptTypeParam InstBody { Instance $2 $5 $6 $3 $7 }
 
 OptTypeParam :: { [Ty] }
@@ -174,16 +174,16 @@ TypeCommaList :: { [Ty] }
 TypeCommaList : Type ',' TypeCommaList             {$1 : $3}
               | Type                               {[$1]}
 
-Functions :: { [FunDef] }
+Functions :: { [FunDef Name] }
 Functions : Function Functions                     {$1 : $2}
           | {- empty -}                            {[]}
 
-InstBody :: {[FunDef]}
+InstBody :: {[FunDef Name]}
 InstBody : '{' Functions '}'                       {$2}
 
 -- Function declaration 
 
-Function :: { FunDef }
+Function :: { FunDef Name }
 Function : Signature Body {FunDef $1 $2}
 
 OptRetTy :: { Maybe Ty }
@@ -192,22 +192,22 @@ OptRetTy : '->' Type                               {Just $2}
 
 -- Contract constructor 
 
-Constructor :: { Constructor }
+Constructor :: { Constructor Name }
 Constructor : 'constructor' '(' ParamList ')' Body {Constructor $3 $5}
 
 -- Function body 
 
-Body :: { [Stmt] }
+Body :: { [Stmt Name] }
 Body : '{' StmtList '}'                            {$2} 
 
-StmtList :: { [Stmt] }
+StmtList :: { [Stmt Name] }
 StmtList : Stmt ';' StmtList                       {$1 : $3}
          | {- empty -}                             {[]}
 
 -- Statements 
 
 
-Stmt :: { Stmt }
+Stmt :: { Stmt Name }
 Stmt : Expr '=' Expr                               {$1 := $3}
      | 'let' Name ':' Type InitOpt                 {Let $2 (Just $4) $5}
      | 'let' Name InitOpt                          {Let $2 Nothing $3}
@@ -215,17 +215,17 @@ Stmt : Expr '=' Expr                               {$1 := $3}
      | 'return' Expr                               {Return $2}
      | 'match' MatchArgList '{' Equations  '}'     {Match $2 $4}
 
-MatchArgList :: {[Exp]}
+MatchArgList :: {[Exp Name]}
 MatchArgList : Expr                                {[$1]}
              | Expr ',' MatchArgList               {$1 : $3}
 
-InitOpt :: {Maybe Exp}
+InitOpt :: {Maybe (Exp Name)}
 InitOpt : {- empty -}                              {Nothing}
         | '=' Expr                                 {Just $2}
 
 -- Expressions 
 
-Expr :: { Exp }
+Expr :: { Exp Name }
 Expr : Name                                        {Var $1}
      | Con ConArgs                                 {Con $1 $2}
      | Literal                                     {Lit $1}
@@ -235,25 +235,25 @@ Expr : Name                                        {Var $1}
      | Name FunArgs                                {Call Nothing $1 $2}
      | 'lam' '(' ParamList ')' Body                {Lam $3 $5} 
 
-ConArgs :: {[Exp]}
+ConArgs :: {[Exp Name]}
 ConArgs : '[' ExprCommaList ']'                    {$2}
         | {- empty -}                              {[]} 
 
-FunArgs :: {[Exp]} 
+FunArgs :: {[Exp Name]} 
 FunArgs : '(' ExprCommaList ')'                    {$2}
 
-ExprCommaList :: { [Exp] }
+ExprCommaList :: { [Exp Name] }
 ExprCommaList : Expr                               {[$1]}
               | {- empty -}                        {[]}
               | Expr ',' ExprCommaList             {$1 : $3}
 
 -- Pattern matching equations 
 
-Equations :: { [([Pat], [Stmt])]}
+Equations :: { [([Pat], [Stmt Name])]}
 Equations : Equation Equations                     {$1 : $2}
           | {- empty -}                            {[]}
 
-Equation :: { ([Pat], [Stmt]) }
+Equation :: { ([Pat], [Stmt Name]) }
 Equation : '|' PatCommaList '=>' StmtList          {($2, $4)}
 
 PatCommaList :: { [Pat] }

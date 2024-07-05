@@ -52,7 +52,7 @@ instance HasType Ty where
   apply (Subst s) t@(TyVar v)
     = maybe t id (lookup v s)
   apply s (TyCon n ts) 
-    = TyCon n (apply s ts)
+    = TyCon n (map (apply s) ts)
 
   fv (TyVar v) = [v]
   fv (TyCon _ ts) = fv ts

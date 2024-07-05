@@ -16,7 +16,7 @@ data Ty
   | TyCon Name [Ty]  -- type constructor 
   deriving (Eq, Ord, Show, Data, Typeable)
 
-infixr 5 :-> 
+infixr 4 :-> 
 
 pattern (:->) a b 
   = TyCon (Name "->") [a, b]

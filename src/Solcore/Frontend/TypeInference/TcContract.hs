@@ -84,8 +84,7 @@ extSignature (Signature n ctx ps t)
       let 
         ty = funtype argTys t' 
         vs = fv (ctx :=> ty)
-      sch <- generalize (ctx, ty)
-      info ["Function:", pretty n, " - type:", pretty sch]
+      sch <- generalize (ctx, ty) 
       extEnv n sch
 
 -- including contructors on environment
@@ -148,12 +147,10 @@ tcBindGroup binds
   = do
       funs <- mapM scanFun binds 
       (funs', pss', ts') <- unzip3 <$> mapM tcFunDef funs
-      s <- getSubst
       qts' <- withCurrentSubst (zip pss' ts')
       schs <- mapM generalize qts'
       let names = map (sigName . funSignature) funs 
-          results = zip names schs
-      info ["Infered types:", unlines $ map pretty schs]
+          results = zip names schs 
       mapM_ (uncurry extEnv) results
       pure (FunDecl <$> funs')
 
@@ -173,7 +170,6 @@ tcFunDef d@(FunDef sig bd)
                            params' 
                            (sigReturn sig) 
       s <- unify t t1 `wrapError` d
-      info ["Ending - unifying:", pretty $ apply s t, " with ", pretty t1]
       withCurrentSubst (FunDef sig' bd', ps1 ++ ps, t1)
 
 scanFun :: Decl Name -> TcM (FunDef Name)
@@ -195,12 +191,13 @@ scanFun d = throwError $ unlines [ "Invalid declaration in bind-group:"
 generalize :: ([Pred], Ty) -> TcM Scheme 
 generalize (ps,t) 
   = do 
-      envVars <- getEnvFreeVars 
+      envVars <- getEnvFreeVars
       (ps1,t1) <- withCurrentSubst (ps,t)
       ps2 <- reduceContext ps1 
       t2 <- withCurrentSubst t1 
       let vs = fv (ps2,t2)
           sch = Forall (vs \\ envVars) (ps2 :=> t2)
+      s <- getSubst 
       return sch
 
 -- context reduction 

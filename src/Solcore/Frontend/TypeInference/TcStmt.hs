@@ -53,12 +53,11 @@ tcStmt m@(Return e)
   = do 
       (e', ps, t) <- tcExp e
       pure (Return e', ps, t)
-tcStmt (Match es eqns) -- FIXME bug here  
+tcStmt (Match es eqns) 
   = do
       resTy <- freshTyVar
       (es', pss', ts') <- unzip3 <$> mapM tcExp es
       (eqns', pss1) <- tcEquations ts' resTy eqns
-      s <- getSubst 
       withCurrentSubst (Match es' eqns', concat (pss1 : pss'), resTy)
 
 tcEquations :: [Ty] -> Ty -> Equations Name -> TcM (Equations Id, [Pred])
@@ -75,12 +74,13 @@ tcEquations ts resTy (eqn : eqns)
 tcEquation :: [Ty] -> Equation Name -> TcM (Equation Id, [Pred], Ty)
 tcEquation ts (ps, ss) 
   = withLocalEnv do 
-      lctx <- tcPats ts ps 
-      mapM_ (uncurry extEnv) lctx
+      (ns, schs, ts') <- unzip3 <$> tcPats ts ps 
+      mapM_ (uncurry extEnv) (zip ns schs)
       (ss', pss', t) <- tcBody ss
+      unifyTypes ts ts'
       withCurrentSubst ((ps, ss'), pss', t)
 
-tcPats :: [Ty] -> [Pat] -> TcM [(Name,Scheme)]
+tcPats :: [Ty] -> [Pat] -> TcM [(Name,Scheme, Ty)]
 tcPats ts ps 
   | length ts /= length ps = wrongPatternNumber ts ps
   | otherwise = do 
@@ -88,13 +88,12 @@ tcPats ts ps
       pure (concat ctxs)
 
 
-tcPat :: Ty -> Pat -> TcM [(Name, Scheme)]
+tcPat :: Ty -> Pat -> TcM [(Name, Scheme, Ty)]
 tcPat t p 
   = do 
       (t', pctx) <- tiPat p
       s <- unify t t'
-      info ["Unifying ", pretty t, " with ", pretty t', " for pat:", pretty p]
-      let pctx' = map (\ (n,t) -> (n, monotype $ apply s t)) pctx
+      let pctx' = map (\ (n,t) -> (n, monotype $ apply s t, t)) pctx
       pure pctx'
 
 tiPat :: Pat -> TcM (Ty, [(Name, Ty)])
@@ -193,12 +192,13 @@ tcBody (s : ss)
 tcCall :: Maybe (Exp Name) -> Name -> [Exp Name] -> TcM (Exp Id, [Pred], Ty)
 tcCall Nothing n args 
   = do 
-      s <- askEnv n 
+      s <- askEnv n
+      info [unwords $ map pretty args]
       (ps :=> t) <- freshInst s
       t' <- freshTyVar
       (es', pss', ts') <- unzip3 <$> mapM tcExp args
       s' <- unify t (foldr (:->) t' ts')
-      info ["Call:", pretty n," unify:", pretty $ apply s' t, " with ", pretty (apply s' $ foldr (:->) t' ts')]
+      info ["Unifying ", pretty t, " with ", pretty $ foldr (:->) t' ts']
       let ps' = foldr union [] (ps : pss')
       withCurrentSubst (Call Nothing n es', ps', t')
 tcCall (Just e) n args 

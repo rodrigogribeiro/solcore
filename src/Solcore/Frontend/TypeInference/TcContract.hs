@@ -149,6 +149,7 @@ tcBindGroup binds
       (funs', pss', ts') <- unzip3 <$> mapM tcFunDef funs
       qts' <- withCurrentSubst (zip pss' ts')
       schs <- mapM generalize qts'
+      info ["Results: ", unlines $ map pretty schs]
       let names = map (sigName . funSignature) funs 
           results = zip names schs 
       mapM_ (uncurry extEnv) results

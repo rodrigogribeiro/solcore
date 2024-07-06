@@ -18,4 +18,8 @@ contract PairModule {
     | Pair[a,b] => return f(a,b);
     };
   }
+
+  function curry(f,x,y) {
+    return f(Pair[x,y]) ; 
+  }
 }

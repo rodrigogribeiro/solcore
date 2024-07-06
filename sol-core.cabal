@@ -41,9 +41,9 @@ library
   -- cabal-fmt: expand src
   exposed-modules:
 --      Solcore.Desugarer.Defunctionalization
---      Solcore.Desugarer.MatchCompiler
---      Solcore.Desugarer.ReplaceWildcard
---      Solcore.Desugarer.SolcoreDesugar
+      Solcore.Desugarer.MatchCompiler
+      Solcore.Desugarer.ReplaceWildcard
+      Solcore.Desugarer.SolcoreDesugar
       Solcore.Frontend.Lexer.SolcoreLexer
       Solcore.Frontend.Parser.SolcoreParser
       Solcore.Frontend.Pretty.SolcorePretty

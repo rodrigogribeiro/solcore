@@ -4,7 +4,7 @@ contract ListModule {
 
 
   function foo (f, g, x, y) {
-    return f(x, g(y)) ;
+    return f(x, g(foo(f,g,x,y))) ;
   }
 
   function zipWith (f,xs,ys) {

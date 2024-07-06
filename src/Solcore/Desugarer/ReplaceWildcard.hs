@@ -9,6 +9,7 @@ import Control.Monad.Writer
 import Data.List
 
 import Solcore.Frontend.Syntax
+import Solcore.Frontend.TypeInference.Id
 
 -- replacing wildcards by fresh pattern variables 
 
@@ -35,7 +36,7 @@ instance ReplaceWildcard Pat where
   replace p@(PLit _)
     = return p 
 
-instance ReplaceWildcard Exp where 
+instance ReplaceWildcard (Exp Id) where 
   replace v@(Var _) = return v 
   replace (Con n es) 
     = Con n <$> replace es 
@@ -49,7 +50,7 @@ instance ReplaceWildcard Exp where
   replace (Lam args bd) 
     = Lam args <$> replace bd
 
-instance ReplaceWildcard Stmt where 
+instance ReplaceWildcard (Stmt Id) where 
   replace (e1 := e2) 
     = (e1 :=) <$> replace e2 
   replace (Let n t me)
@@ -61,19 +62,19 @@ instance ReplaceWildcard Stmt where
   replace (Match es eqns)
     = Match <$> replace es <*> replace eqns
 
-instance ReplaceWildcard FunDef where 
+instance ReplaceWildcard (FunDef Id) where 
   replace (FunDef sig bd)
     = FunDef sig <$> replace bd
 
-instance ReplaceWildcard Constructor where 
+instance ReplaceWildcard (Constructor Id) where 
   replace (Constructor ps bd)
     = Constructor ps <$> replace bd
 
-instance ReplaceWildcard Instance where 
+instance ReplaceWildcard (Instance Id) where 
   replace (Instance ps n ts m funs)
     = Instance ps n ts m <$> replace funs
 
-instance ReplaceWildcard Decl where 
+instance ReplaceWildcard (Decl Id) where 
   replace (FunDecl fd) 
     = FunDecl <$> replace fd 
   replace (ConstrDecl c)
@@ -82,15 +83,15 @@ instance ReplaceWildcard Decl where
     = InstDecl <$> replace inst 
   replace d = return d 
 
-instance ReplaceWildcard Contract where 
+instance ReplaceWildcard (Contract Id) where 
   replace (Contract n ts decls)
     = Contract n ts <$> replace decls 
 
 -- Compiler monad infra 
 
-type CompilerM n a 
+type CompilerM a 
   = ReaderT String (ExceptT String 
-                   (WriterT [FunDef n] 
+                   (WriterT [FunDef Id] 
                    (StateT Int IO))) a
 
 mkPrefix :: [Name] -> String 
@@ -109,14 +110,19 @@ freshName
         -- pre <- ask 
         return (Name ("var_" ++ show n))
 
-freshExpVar :: CompilerM Exp 
+freshId :: CompilerM Id 
+freshId = Id <$> freshName <*> var 
+  where 
+    var = (TyVar . TVar) <$> freshName
+
+freshExpVar :: CompilerM (Exp Id) 
 freshExpVar 
-  = Var <$> freshName 
+  = Var <$> freshId  
 
 freshPVar :: CompilerM Pat 
 freshPVar 
   = PVar <$> freshName
 
-runCompilerM :: [Name] -> CompilerM a -> IO (Either String a, [FunDef])
+runCompilerM :: [Name] -> CompilerM a -> IO (Either String a, [FunDef Id])
 runCompilerM ns m
   = evalStateT (runWriterT (runExceptT (runReaderT m (mkPrefix ns)))) 0

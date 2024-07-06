@@ -15,6 +15,7 @@ import Solcore.Frontend.Pretty.SolcorePretty
 import Solcore.Frontend.Syntax.Contract
 import Solcore.Frontend.Syntax.Stmt 
 import Solcore.Frontend.Syntax.Name
+import Solcore.Frontend.TypeInference.Id
 import Solcore.Primitives.Primitives
 
 import Text.PrettyPrint.HughesPJ (render, hsep)
@@ -36,7 +37,7 @@ https://link.springer.com/content/pdf/10.1007/3-540-15975-4_48.pdf
 -- top level interface for the compiler 
 
 
-matchCompiler :: CompUnit -> IO (Either String CompUnit)
+matchCompiler :: CompUnit Id -> IO (Either String (CompUnit Id))
 matchCompiler (CompUnit imps cons) 
   = do
       res <- mapM matchCompilerContract cons 
@@ -44,7 +45,7 @@ matchCompiler (CompUnit imps cons)
         ([], cons') -> return $ Right $ CompUnit imps cons'
         (errs, _)   -> return $ Left $ unlines errs
 
-matchCompilerContract :: Contract -> IO (Either String Contract)
+matchCompilerContract :: Contract Id -> IO (Either String (Contract Id))
 matchCompilerContract (Contract n ts ds)
   = do 
       res <- runCompilerM [n] (mapM compile ds)
@@ -65,8 +66,8 @@ instance Compile a => Compile (Maybe a) where
   compile Nothing = return Nothing 
   compile (Just e) = Just <$> compile e
 
-instance Compile Decl where 
-  type Res Decl = Decl 
+instance Compile (Decl Id) where 
+  type Res (Decl Id) = Decl Id
   compile (InstDecl inst)
     = InstDecl <$> compile inst 
   compile (FunDecl fun)
@@ -75,13 +76,13 @@ instance Compile Decl where
     = ConstrDecl <$> compile con 
   compile d = return d 
 
-instance Compile Instance where 
-  type Res Instance = Instance 
+instance Compile (Instance Id) where 
+  type Res (Instance Id) = Instance Id
   compile (Instance ps n ts m funs)
     = Instance ps n ts m <$> compile funs 
 
-instance Compile FunDef where 
-  type Res FunDef = FunDef 
+instance Compile (FunDef Id) where 
+  type Res (FunDef Id) = FunDef Id
   compile (FunDef sig bd)
     = do
         bd1 <- replace bd
@@ -90,13 +91,13 @@ instance Compile FunDef where
                      (compile bd1)
         return (FunDef sig (concat bd'))
 
-instance Compile Constructor where 
-  type Res Constructor = Constructor 
+instance Compile (Constructor Id) where 
+  type Res (Constructor Id) = Constructor Id
   compile (Constructor ps bd)
     = (Constructor ps . concat) <$> compile bd 
 
-instance Compile Stmt where 
-  type Res Stmt = [Stmt]
+instance Compile (Stmt Id) where 
+  type Res (Stmt Id) = [Stmt Id]
 
   compile (Match es eqns) 
     = do 
@@ -106,7 +107,7 @@ instance Compile Stmt where
 
 -- Algorithm main function 
 
-matchCompilerM :: [Exp] -> [Stmt] -> Equations -> CompilerM [Stmt] 
+matchCompilerM :: [Exp Id] -> [Stmt Id] -> Equations Id -> CompilerM [Stmt Id] 
 -- first case: No remaining equations. We return the default body.
 matchCompilerM _ d [] = return d
 -- second case: no scrutinee. Result is the body of the first equation.
@@ -126,7 +127,7 @@ matchCompilerM es d eqns@(_ : _)
 
 -- Implementation of the third case.
 
-thirdCase :: [Exp] -> [Stmt] -> Equations -> CompilerM [Stmt]
+thirdCase :: [Exp Id] -> [Stmt Id] -> Equations Id -> CompilerM [Stmt Id]
 thirdCase _ _ []   
   = throwError "Panic! Impossible --- thirdCase."
 thirdCase (e : es) d eqns 
@@ -141,7 +142,7 @@ thirdCase (e : es) d eqns
 
 -- Implementation of the fourth case 
 
-fourthCase :: [Exp] -> [Stmt] -> Equations -> CompilerM [Stmt]
+fourthCase :: [Exp Id] -> [Stmt Id] -> Equations Id -> CompilerM [Stmt Id]
 fourthCase _ _ []
   = throwError "Panic! Impossible --- fourthCase."
 fourthCase (e : es) d eqns 
@@ -153,7 +154,7 @@ fourthCase (e : es) d eqns
 
 -- implementation of the fifth case 
 
-fifthCase :: [Exp] -> [Stmt] -> Equations -> CompilerM [Stmt]
+fifthCase :: [Exp Id] -> [Stmt Id] -> Equations Id -> CompilerM [Stmt Id]
 fifthCase [] _ [] 
   = throwError "Panic! Impossible --- fifthCase"
 fifthCase es@(_ : _) d eqns@(_ : eqs)
@@ -165,18 +166,18 @@ fifthCase es@(_ : _) d eqns@(_ : eqs)
           matchCompilerM es d' eq 
         Nothing -> throwError "Panic! Impossible --- fifthCase"
 
-hasVarsBetweenConstrs :: Equations -> Bool
+hasVarsBetweenConstrs :: Equations Id -> Bool
 hasVarsBetweenConstrs eqns 
   = length (splits isConstr eqns) >= 2 
 
-generateFunctions :: [Exp] -> [Stmt] -> [Equations] -> CompilerM [Stmt]
+generateFunctions :: [Exp Id] -> [Stmt Id] -> [Equations Id] -> CompilerM [Stmt Id]
 generateFunctions es d [] = return d 
 generateFunctions es d (eqn : eqns)
   = do 
       d' <- generateFunction es d eqn 
       generateFunctions es d' eqns 
 
-generateFunction :: [Exp] -> [Stmt] -> Equations -> CompilerM [Stmt]
+generateFunction :: [Exp Id] -> [Stmt Id] -> Equations Id -> CompilerM [Stmt Id]
 generateFunction es d eqn 
   = do
       n <- newFunName
@@ -192,17 +193,17 @@ newFunName
       pre <- ask 
       return (Name $ "fun_" ++ pre ++ "_" ++ show n)
 
-eqnsForConstrs :: [Exp] -> [Stmt] -> Equations -> CompilerM Equations
+eqnsForConstrs :: [Exp Id] -> [Stmt Id] -> Equations Id -> CompilerM (Equations Id)
 eqnsForConstrs es d eqns
   = concat <$> mapM (eqForConstr es def) (groupByConstr eqns)
     where 
       def = [StmtExp (Var (Name "default"))]
 
-eqForConstr :: [Exp] -> [Stmt] -> Equations -> CompilerM Equations 
+eqForConstr :: [Exp Id] -> [Stmt Id] -> Equations Id -> CompilerM (Equations Id)
 eqForConstr es d eqn 
   = mapM (buildEquation es d) eqn  
 
-buildEquation :: [Exp] -> [Stmt] -> Equation -> CompilerM Equation 
+buildEquation :: [Exp Id] -> [Stmt Id] -> Equation Id -> CompilerM (Equation Id)
 buildEquation _ _ ([], _) 
   = throwError "Panic! Impossible --- buildEquation"
 buildEquation (_ : es) d (p : ps, ss)
@@ -210,14 +211,14 @@ buildEquation (_ : es) d (p : ps, ss)
         (p', ps', vs) <- instantiatePat p
         ([p'],) <$> matchCompilerM (vs ++ es) d [(ps' ++ ps, ss)] 
 
-instantiatePat :: Pat -> CompilerM (Pat, [Pat], [Exp])
+instantiatePat :: Pat -> CompilerM (Pat, [Pat], [Exp Id])
 instantiatePat p@(PLit _) = return (p, [], [])
 instantiatePat (PCon n ps)
   = do 
       vs <- mapM (const freshName) ps 
       return (PCon n (map PVar vs), ps, map Var vs)
 
-groupByConstr :: Equations -> [Equations]
+groupByConstr :: Equations Id -> [Equations Id]
 groupByConstr 
   = groupBy conEq . sort 
     where 
@@ -225,7 +226,7 @@ groupByConstr
       conEq _ _ = False
 
 
-eqnsForVars :: [Exp] -> [Stmt] -> Equations -> CompilerM Equations 
+eqnsForVars :: [Exp Id] -> [Stmt Id] -> Equations Id -> CompilerM (Equations Id)
 eqnsForVars es d eqns 
   = do 
       v <- freshPVar
@@ -238,7 +239,7 @@ eqnsForVars es d eqns
       return [([v], ss')]
 
 
-hasConstrsBeforeVars :: Equations -> Bool 
+hasConstrsBeforeVars :: Equations Id -> Bool 
 hasConstrsBeforeVars eqns 
   = let 
        (cs, vs) = span isConstr eqns 
@@ -247,7 +248,7 @@ hasConstrsBeforeVars eqns
     in (not $ null cs) && all isVar vs 
 
 
-isConstr :: ([Pat], [Stmt]) -> Bool 
+isConstr :: ([Pat], [Stmt Id]) -> Bool 
 isConstr ((PCon _ _) : _, _) = True 
 isConstr ((PLit _) : _, _) = True
 isConstr _ = False
@@ -255,11 +256,11 @@ isConstr _ = False
 -- this function is safe because every call is 
 -- guarded by allPatsStartsWithVars
 
-pVarToExp :: [Pat] -> Exp 
+pVarToExp :: [Pat] -> Exp Id 
 pVarToExp ((PVar n) : _) = Var n 
 pVarToExp _ = error "Panic! Impossible --- pVarToExp"
 
-allPatsStartsWithVars :: Equations -> Bool 
+allPatsStartsWithVars :: Equations Id -> Bool 
 allPatsStartsWithVars = all startWithVar
   where 
     startWithVar ((PVar _) : _, _) = True
@@ -286,7 +287,7 @@ instance Apply a => Apply (Maybe a) where
 instance (Apply a, Apply b) => Apply (a, b) where
   apply s (a,b) = (apply s a, apply s b)
 
-instance Apply Stmt where 
+instance Apply (Stmt Id) where 
   apply s (e1 := e2) 
     = e1 := (apply s e2)
   apply s (Let n t me) 
@@ -298,7 +299,7 @@ instance Apply Stmt where
   apply s (Match es eqns)
     = Match (apply s es) (apply s eqns) 
 
-instance Apply Exp where 
+instance Apply (Exp Id) where 
   apply s v@(Var n)
     = maybe v Var (lookup n s)
   apply s (Con n es)
@@ -320,17 +321,17 @@ instance Apply Pat where
 
 -- infrastructure for the algorithm 
 
-matchErrorCase :: CompilerM [Stmt]  
+matchErrorCase :: CompilerM [Stmt Id]  
 matchErrorCase 
   = return [StmtExp $ generateCall matchError [errorLit]]
 
-generateCall :: Name -> [Exp] -> Exp 
+generateCall :: Name -> [Exp Id] -> Exp Id
 generateCall = Call Nothing
 
 matchError :: Name 
 matchError = Name "revert"
 
-errorLit :: Exp 
+errorLit :: Exp Id  
 errorLit = Lit $ StrLit "Incomplete matching"
 
 splits :: (a -> Bool) -> [a] -> [[a]]

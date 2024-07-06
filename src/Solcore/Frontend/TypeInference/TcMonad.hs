@@ -153,6 +153,9 @@ withLocalEnv ta
       putEnv ctx 
       pure a 
 
+envList :: TcM [(Name, Scheme)]
+envList = gets (Map.toList . ctx)
+
 -- environment operations: variables 
 
 maybeAskEnv :: Name -> TcM (Maybe Scheme)

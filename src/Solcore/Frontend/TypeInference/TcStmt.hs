@@ -55,29 +55,28 @@ tcStmt m@(Return e)
       pure (Return e', ps, t)
 tcStmt (Match es eqns) 
   = do
-      resTy <- freshTyVar
       (es', pss', ts') <- unzip3 <$> mapM tcExp es
-      (eqns', pss1) <- tcEquations ts' resTy eqns
+      (eqns', pss1, resTy) <- tcEquations ts' eqns
       withCurrentSubst (Match es' eqns', concat (pss1 : pss'), resTy)
 
-tcEquations :: [Ty] -> Ty -> Equations Name -> TcM (Equations Id, [Pred])
-tcEquations _ _ [] = pure ([], [])
-tcEquations ts resTy (eqn : eqns)  
+tcEquations :: [Ty] -> Equations Name -> TcM (Equations Id, [Pred], Ty)
+tcEquations ts eqns  
   = do
-      (eqn', ps, t) <- tcEquation ts eqn
-      unify t resTy
-      ts' <- withCurrentSubst ts 
-      resTy' <- withCurrentSubst resTy 
-      (eqns', ps') <- tcEquations ts' resTy' eqns 
-      pure (eqn' : eqns', ps ++ ps')
+      (eqns', ps, ts') <- unzip3 <$> mapM (tcEquation ts) eqns
+      resTy <- freshTyVar
+      mapM_ (unify resTy) ts'
+      pure (eqns', concat ps, resTy)
+
+envL = do 
+  x <- envList
+  pure $ unlines (map (\(n,s) -> pretty n ++ " :: " ++ pretty s) x) 
 
 tcEquation :: [Ty] -> Equation Name -> TcM (Equation Id, [Pred], Ty)
 tcEquation ts (ps, ss) 
-  = withLocalEnv do 
+  = do 
       (ns, schs, ts') <- unzip3 <$> tcPats ts ps 
       mapM_ (uncurry extEnv) (zip ns schs)
       (ss', pss', t) <- tcBody ss
-      unifyTypes ts ts'
       withCurrentSubst ((ps, ss'), pss', t)
 
 tcPats :: [Ty] -> [Pat] -> TcM [(Name,Scheme, Ty)]
@@ -189,17 +188,21 @@ tcBody (s : ss)
       (bd', ps1, t1) <- tcBody ss 
       pure (s' : bd', ps' ++ ps1, t1)
 
+foo (a,t) = unwords ["Argument:", pretty a, " - Type:", pretty t, ". "]
+
 tcCall :: Maybe (Exp Name) -> Name -> [Exp Name] -> TcM (Exp Id, [Pred], Ty)
 tcCall Nothing n args 
   = do 
       s <- askEnv n
-      info [unwords $ map pretty args]
+      -- info ["Typing the call:", pretty n]
       (ps :=> t) <- freshInst s
       t' <- freshTyVar
       (es', pss', ts') <- unzip3 <$> mapM tcExp args
+      -- info (map foo (zip args ts'))
       s' <- unify t (foldr (:->) t' ts')
-      info ["Unifying ", pretty t, " with ", pretty $ foldr (:->) t' ts']
+      -- info ["Unifying ", pretty t, " with ", pretty $ foldr (:->) t' ts']
       let ps' = foldr union [] (ps : pss')
+      -- info ["Result for call:", pretty n, " is ", pretty $ apply s' t']
       withCurrentSubst (Call Nothing n es', ps', t')
 tcCall (Just e) n args 
   = do 

@@ -33,7 +33,7 @@ sccContract (Contract n ts ds)
       newDecls <- rebuildDecls posMap declMap (scc cgraph)
       (cgraph', posMap', declMap') <- mkCallGraph newDecls
       newDecls' <- sortDecls posMap' declMap' (topsort cgraph')
-      pure (Contract n ts (newDecls' ++ others))
+      pure (Contract n ts (others ++ newDecls'))
     where 
       isDecl (FunDecl _) = True 
       isDecl _ = False 

@@ -65,15 +65,11 @@ tcEquations ts eqns
       (eqns', ps, ts') <- unzip3 <$> mapM (tcEquation ts) eqns
       resTy <- freshTyVar
       mapM_ (unify resTy) ts'
-      pure (eqns', concat ps, resTy)
-
-envL = do 
-  x <- envList
-  pure $ unlines (map (\(n,s) -> pretty n ++ " :: " ++ pretty s) x) 
+      withCurrentSubst (eqns', concat ps, resTy)
 
 tcEquation :: [Ty] -> Equation Name -> TcM (Equation Id, [Pred], Ty)
 tcEquation ts (ps, ss) 
-  = do 
+  = withLocalEnv do 
       (ns, schs, ts') <- unzip3 <$> tcPats ts ps 
       mapM_ (uncurry extEnv) (zip ns schs)
       (ss', pss', t) <- tcBody ss
@@ -188,21 +184,21 @@ tcBody (s : ss)
       (bd', ps1, t1) <- tcBody ss 
       pure (s' : bd', ps' ++ ps1, t1)
 
-foo (a,t) = unwords ["Argument:", pretty a, " - Type:", pretty t, ". "]
+foo (n,t) = pretty n ++ " :: " ++ pretty t ++ " "
 
 tcCall :: Maybe (Exp Name) -> Name -> [Exp Name] -> TcM (Exp Id, [Pred], Ty)
 tcCall Nothing n args 
   = do 
       s <- askEnv n
-      -- info ["Typing the call:", pretty n]
+      info ["Typing the call:", pretty n]
       (ps :=> t) <- freshInst s
       t' <- freshTyVar
       (es', pss', ts') <- unzip3 <$> mapM tcExp args
-      -- info (map foo (zip args ts'))
+      info ("Arguments: " : map foo (zip args ts'))
       s' <- unify t (foldr (:->) t' ts')
       -- info ["Unifying ", pretty t, " with ", pretty $ foldr (:->) t' ts']
       let ps' = foldr union [] (ps : pss')
-      -- info ["Result for call:", pretty n, " is ", pretty $ apply s' t']
+      info ["Result for call:", pretty n, " is ", pretty $ apply s' t']
       withCurrentSubst (Call Nothing n es', ps', t')
 tcCall (Just e) n args 
   = do 

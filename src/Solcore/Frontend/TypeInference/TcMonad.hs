@@ -43,8 +43,9 @@ getEnvFreeVars
 unify :: Ty -> Ty -> TcM Subst
 unify t t' 
   = do
+      -- info ["Unifying:", pretty t, " with ", pretty t']
       s <- getSubst 
-      s' <- mgu (apply s t) (apply s t') 
+      s' <- mgu (apply s t) (apply s t')
       extSubst s'
 
 -- type instantiation 

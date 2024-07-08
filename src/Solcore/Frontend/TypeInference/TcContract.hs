@@ -172,7 +172,8 @@ tcFunDef d@(FunDef sig bd)
                            (sigReturn sig) 
       s <- unify t t1 `wrapError` d
       qts <- withCurrentSubst (ps1 ++ ps, t1)
-      sch <- generalize qts 
+      sch <- generalize qts
+      info ["Before quantify:", pretty (sigName sig), " - ", pretty $ apply s t1]
       pure (FunDef sig' bd', sch)
 
 scanFun :: Decl Name -> TcM (FunDef Name)

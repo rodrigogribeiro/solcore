@@ -16,7 +16,7 @@ contract EitherModule {
     | Nil => return Nil ;
     | Cons[y,ys] => 
       match y {
-      | Left[z] => return Cons[y,lefts(ys)] ; 
+      | Left[z] => return Cons[z,lefts(ys)] ; 
       | Right[z] => return lefts(ys) ;
       };
     };

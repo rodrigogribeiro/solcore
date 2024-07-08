@@ -12,9 +12,7 @@ import qualified Data.List.NonEmpty as L
 
 import Solcore.Desugarer.ReplaceWildcard
 import Solcore.Frontend.Pretty.SolcorePretty
-import Solcore.Frontend.Syntax.Contract
-import Solcore.Frontend.Syntax.Stmt 
-import Solcore.Frontend.Syntax.Name
+import Solcore.Frontend.Syntax
 import Solcore.Frontend.TypeInference.Id
 import Solcore.Primitives.Primitives
 
@@ -132,13 +130,13 @@ thirdCase _ _ []
   = throwError "Panic! Impossible --- thirdCase."
 thirdCase (e : es) d eqns 
   = do 
-      v@(Var n) <- freshExpVar
+      (Id n t) <- freshId
       let 
           vs = foldr (union . L.head . L.fromList . map vars . fst) [] eqns 
           s  = map (\ vi -> (vi, n)) vs 
           eqns' = map (\ (_ : ps, ss) -> (ps, apply s ss)) eqns
       res <- matchCompilerM es d eqns' 
-      return (Let n Nothing (Just e) : res) 
+      return (Let n (Just t) (Just e) : res) 
 
 -- Implementation of the fourth case 
 
@@ -195,9 +193,10 @@ newFunName
 
 eqnsForConstrs :: [Exp Id] -> [Stmt Id] -> Equations Id -> CompilerM (Equations Id)
 eqnsForConstrs es d eqns
-  = concat <$> mapM (eqForConstr es def) (groupByConstr eqns)
-    where 
-      def = [StmtExp (Var (Name "default"))]
+  = do
+      t <- (TyVar . TVar) <$> freshName
+      let def = [StmtExp (Var (Id (Name "default") t))]
+      concat <$> mapM (eqForConstr es def) (groupByConstr eqns)
 
 eqForConstr :: [Exp Id] -> [Stmt Id] -> Equations Id -> CompilerM (Equations Id)
 eqForConstr es d eqn 
@@ -214,9 +213,10 @@ buildEquation (_ : es) d (p : ps, ss)
 instantiatePat :: Pat -> CompilerM (Pat, [Pat], [Exp Id])
 instantiatePat p@(PLit _) = return (p, [], [])
 instantiatePat (PCon n ps)
-  = do 
-      vs <- mapM (const freshName) ps 
-      return (PCon n (map PVar vs), ps, map Var vs)
+  = do
+      vs <- mapM (const freshId) ps 
+      let vs' = map (\ (Id n _) -> n) vs
+      return (PCon n (map PVar vs'), ps, map Var vs)
 
 groupByConstr :: Equations Id -> [Equations Id]
 groupByConstr 
@@ -255,10 +255,6 @@ isConstr _ = False
 
 -- this function is safe because every call is 
 -- guarded by allPatsStartsWithVars
-
-pVarToExp :: [Pat] -> Exp Id 
-pVarToExp ((PVar n) : _) = Var n 
-pVarToExp _ = error "Panic! Impossible --- pVarToExp"
 
 allPatsStartsWithVars :: Equations Id -> Bool 
 allPatsStartsWithVars = all startWithVar
@@ -300,8 +296,10 @@ instance Apply (Stmt Id) where
     = Match (apply s es) (apply s eqns) 
 
 instance Apply (Exp Id) where 
-  apply s v@(Var n)
-    = maybe v Var (lookup n s)
+  apply s v@(Var (Id n t))
+    = maybe v f (lookup n s)
+      where 
+        f v = Var (Id v t)
   apply s (Con n es)
     = Con n (apply s es)
   apply s (FieldAccess e n)

@@ -25,7 +25,7 @@ pipeline = do
         Right (c', env) -> 
          do 
             when (enableLog env) (mapM_ putStrLn (logs env))
-            res <- matchCompiler ast 
+            res <- matchCompiler c' 
             case res of 
               Right r -> putStrLn $ pretty r 
               Left err -> putStrLn err 

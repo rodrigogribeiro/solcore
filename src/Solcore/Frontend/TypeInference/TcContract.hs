@@ -74,6 +74,8 @@ checkDecl (FunDecl (FunDef sig _))
   = extSignature sig
 checkDecl (FieldDecl fd)
   = tcField fd >> return ()
+checkDecl (MutualDecl ds) 
+  = mapM_ checkDecl ds
 checkDecl _ = return ()
 
 extSignature :: Signature Name -> TcM ()
@@ -137,7 +139,7 @@ tcField (Field n t _)
 tcInstance :: Instance Name -> TcM (Instance Id)
 tcInstance (Instance ctx n ts t funs) 
   = do 
-      (funs', _, _) <- unzip3 <$> mapM tcFunDef funs
+      (funs', _) <- unzip <$> mapM tcFunDef funs
       pure (Instance ctx n ts t funs')
 
 -- type checking binding groups
@@ -145,20 +147,18 @@ tcInstance (Instance ctx n ts t funs)
 tcBindGroup :: [Decl Name] -> TcM [Decl Id]
 tcBindGroup binds 
   = do
-      funs <- mapM scanFun binds 
-      (funs', pss', ts') <- unzip3 <$> mapM tcFunDef funs
-      qts' <- withCurrentSubst (zip pss' ts')
-      schs <- mapM generalize qts'
-      info ["Results: ", unlines $ map pretty schs]
+      funs <- mapM scanFun binds
+      (funs', schs) <- unzip <$> mapM tcFunDef funs
       let names = map (sigName . funSignature) funs 
-          results = zip names schs 
-      mapM_ (uncurry extEnv) results
+      let p (x,y) = pretty x ++ " :: " ++ pretty y
+      mapM_ (uncurry extEnv) (zip names schs)
+      info ["Results: ", unlines $ map p $ zip names schs]
       pure (FunDecl <$> funs')
 
 
 -- type checking a single bind
 
-tcFunDef :: FunDef Name -> TcM (FunDef Id, [Pred], Ty)
+tcFunDef :: FunDef Name -> TcM (FunDef Id, Scheme)
 tcFunDef d@(FunDef sig bd) 
   = withLocalEnv do
       (params', ts) <- unzip <$> mapM addArg (sigParams sig)
@@ -171,7 +171,9 @@ tcFunDef d@(FunDef sig bd)
                            params' 
                            (sigReturn sig) 
       s <- unify t t1 `wrapError` d
-      withCurrentSubst (FunDef sig' bd', ps1 ++ ps, t1)
+      qts <- withCurrentSubst (ps1 ++ ps, t1)
+      sch <- generalize qts 
+      pure (FunDef sig' bd', sch)
 
 scanFun :: Decl Name -> TcM (FunDef Name)
 scanFun (FunDecl (FunDef sig bd)) 

@@ -17,7 +17,7 @@ build-type:     Simple
 common common-opts
 
   build-depends:
-      base
+      base >= 4.19.0.0
     , mtl
     , containers
     , fgl
@@ -40,7 +40,7 @@ library
 
   -- cabal-fmt: expand src
   exposed-modules:
---      Solcore.Desugarer.Defunctionalization
+      Solcore.Desugarer.Defunctionalization
       Solcore.Desugarer.MatchCompiler
       Solcore.Desugarer.ReplaceWildcard
       Solcore.Desugarer.SolcoreDesugar

@@ -1,12 +1,29 @@
 module Solcore.Desugarer.Defunctionalization where
 
+import Control.Monad.Except
+import Control.Monad.Identity
+import Control.Monad.State
+
 import Data.List
 import Data.Map (Map)
 import qualified Data.Map as Map 
 
 import Solcore.Frontend.Syntax 
 import Solcore.Frontend.TypeInference.Id
+import Solcore.Frontend.TypeInference.NameSupply 
 import Solcore.Frontend.TypeInference.TcSubst 
+
+
+defunctionalize :: CompUnit Id -> Either String (CompUnit Id)
+defunctionalize (CompUnit imps cs) 
+  = case runDefunM initEnv (mapM defunContract cs) of 
+      Left err -> Left err 
+      Right (cs', _) -> Right (CompUnit imps cs') 
+
+defunContract :: Contract Id -> DefunM (Contract Id)
+defunContract c 
+  = undefined 
+
 
 -- definition of a type to hold lambda abstractions in code 
 
@@ -128,3 +145,27 @@ collectArgs n = foldr step Map.empty
   where 
     step (Lam args bd) ac = Map.insertWith (++) n [LamDef args bd] ac  
     step e ac = Map.unionWith (++) (collectLam e) ac
+
+-- definition of a monad for defunctionalization 
+
+data Env 
+  = Env {
+      lambdas :: Map Name LamDef -- table containing collect lambdas 
+    , nameSupply :: NameSupply -- fresh name supply 
+    , functions :: [FunDef Id] -- functions generated
+    , contractName :: Maybe Name 
+    }
+
+type DefunM a = (StateT Env (ExceptT String Identity)) a 
+
+runDefunM :: Env -> DefunM a -> Either String (a, Env)
+runDefunM env m = runIdentity (runExceptT (runStateT m env))
+
+addFunDef :: FunDef Id -> DefunM ()
+addFunDef fd 
+  = modify (\ env -> env {functions = fd : functions env})
+
+-- initializing the environment
+
+initEnv :: Env 
+initEnv = Env Map.empty namePool [] Nothing 

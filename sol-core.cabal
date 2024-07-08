@@ -89,9 +89,5 @@ test-suite sol-core-tests
 
   build-depends:
     , sol-core
-    , hedgehog
-    , hspec
-    , hspec-core
-    , hspec-discover
-    , hspec-expectations
-    , hspec-hedgehog
+    , tasty
+    , tasty-hunit

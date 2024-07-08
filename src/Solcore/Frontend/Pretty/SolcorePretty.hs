@@ -194,7 +194,12 @@ instance Pretty a => Pretty (Equation a) where
 
 pprOptTy :: Maybe Ty -> Doc 
 pprOptTy Nothing = empty 
-pprOptTy (Just t) = ppr t 
+pprOptTy (Just t)
+  | isVar t = empty 
+  | otherwise = text "::" <+> ppr t 
+
+isVar (TyVar _) = True 
+isVar _ = False 
 
 pprInitOpt :: Pretty a => Maybe (Exp a) -> Doc
 pprInitOpt Nothing = semi

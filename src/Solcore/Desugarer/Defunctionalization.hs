@@ -1,43 +1,72 @@
 module Solcore.Desugarer.Defunctionalization where
 
+import Control.Monad.Except
+import Control.Monad.Identity
+import Control.Monad.State
+
 import Data.List
 import Data.Map (Map)
 import qualified Data.Map as Map 
 
 import Solcore.Frontend.Syntax 
+import Solcore.Frontend.TypeInference.Id
+import Solcore.Frontend.TypeInference.NameSupply 
+import Solcore.Frontend.TypeInference.TcSubst 
+
+
+defunctionalize :: CompUnit Id -> Either String (CompUnit Id)
+defunctionalize (CompUnit imps cs) 
+  = case runDefunM initEnv (mapM defunContract cs) of 
+      Left err -> Left err 
+      Right (cs', _) -> Right (CompUnit imps cs') 
+
+defunContract :: Contract Id -> DefunM (Contract Id)
+defunContract c 
+  = undefined 
 
 
 -- definition of a type to hold lambda abstractions in code 
 
 data LamDef 
   = LamDef { 
-      lamArgs :: [Param] -- lambda arguments 
-    , lamBody :: Body    -- lambda body 
+      lamArgs :: [Param Id] -- lambda arguments 
+    , lamBody :: Body Id    -- lambda body 
     } deriving (Eq, Ord, Show)
 
 -- create data types for each lambda abstraction parameter 
 -- of a high-order function. 
 
 createDataTy :: Name -> (Name, [LamDef]) -> DataTy 
-createDataTy n (f, lams) 
-  = DataTy (Name n') [] (map mkConstr lams) 
-  where 
-    n' = unName n ++ "_" ++ unName f
-    mkConstr (LamDef args bd) = undefined
+createDataTy (Name n) ((Name f), lams) 
+  = DataTy (Name n') tvs (zipWith (mkConstr n' tvs) idss [0..]) 
+    where
+      n' = n ++ "_" ++ f 
+      idss = map vars lams
+      ids = foldr union [] idss
+      tvs = foldr (union . fv . idType) [] ids
+
+mkConstr :: String -> [Tyvar] -> [Id] -> Int -> Constr 
+mkConstr s tvs ids i  
+  = Constr (Name (s ++ show i)) 
+           (map (mkConstrParam s tvs . idType) ids)
+
+mkConstrParam :: String -> [Tyvar] -> Ty -> Ty 
+mkConstrParam s vs (_ :-> _) = TyCon (Name s) (TyVar <$> vs)
+mkConstrParam _ _ t = t 
 
 -- determining free variables 
 
 class Vars a where 
-  vars :: a -> [Name]
+  vars :: a -> [Id]
 
 instance Vars a => Vars [a] where 
   vars = foldr (union . vars) []
 
-instance Vars Param where 
+instance Vars (Param Id) where 
   vars (Typed n _) = [n]
   vars (Untyped n) = [n]
 
-instance Vars Stmt where 
+instance Vars (Stmt Id) where 
   vars (e1 := e2) = vars [e1,e2]
   vars (Let _ _ (Just e)) = vars e
   vars (Let _ _ _) = []
@@ -45,10 +74,10 @@ instance Vars Stmt where
   vars (Return e) = vars e 
   vars (Match e eqns) = vars e `union` vars eqns 
 
-instance Vars Equation where 
+instance Vars (Equation Id) where 
   vars (_, ss) = vars ss 
 
-instance Vars Exp where 
+instance Vars (Exp Id) where 
   vars (Var n) = [n]
   vars (Con _ es) = vars es 
   vars (FieldAccess e _) = vars e
@@ -56,6 +85,9 @@ instance Vars Exp where
   vars (Call Nothing _ es) = vars es 
   vars (Lam ps bd) = vars bd \\ vars ps
   vars _ = []
+
+instance Vars LamDef where 
+  vars (LamDef ps ss) = vars ss \\ vars ps
 
 -- collecting all lambdas that are parameter of high-order functions 
 
@@ -67,29 +99,29 @@ instance CollectLam a => CollectLam [a] where
     where 
       step x ac = Map.unionWith (++) (collectLam x) ac
 
-instance CollectLam CompUnit where 
+instance CollectLam (CompUnit Id) where 
   collectLam (CompUnit _ cs) = collectLam cs
 
-instance CollectLam Contract where 
+instance CollectLam (Contract Id) where 
   collectLam (Contract _ _ decls) = collectLam decls
 
-instance CollectLam Decl where 
+instance CollectLam (Decl Id) where 
   collectLam (ConstrDecl cd) = collectLam cd 
   collectLam (FieldDecl fd) = collectLam fd 
   collectLam (FunDecl fd) = collectLam fd 
   collectLam _ = Map.empty 
 
-instance CollectLam Constructor where 
+instance CollectLam (Constructor Id) where 
   collectLam (Constructor _ bd) = collectLam bd 
 
-instance CollectLam Field where 
+instance CollectLam (Field Id) where 
   collectLam (Field _ _ (Just e)) = collectLam e 
   collectLam _ = Map.empty 
 
-instance CollectLam FunDef where 
+instance CollectLam (FunDef Id) where 
   collectLam (FunDef _ bd) = collectLam bd 
 
-instance CollectLam Stmt where 
+instance CollectLam (Stmt Id) where 
   collectLam (_ := e) = collectLam e 
   collectLam (Let _ _ (Just e)) = collectLam e
   collectLam (StmtExp e) = collectLam e 
@@ -97,10 +129,10 @@ instance CollectLam Stmt where
   collectLam (Match es eqns)
     = Map.unionWith (++) (collectLam es) (collectLam eqns)
 
-instance CollectLam Equation where 
+instance CollectLam (Equation Id) where 
   collectLam (_, bd) = collectLam bd 
 
-instance CollectLam Exp where 
+instance CollectLam (Exp Id) where 
   collectLam (Con _ es) = collectLam es 
   collectLam (FieldAccess e _) = collectLam e 
   collectLam (Call (Just e) n es) 
@@ -108,8 +140,32 @@ instance CollectLam Exp where
   collectLam (Call _ n es) = collectArgs n es 
   collectLam _ = Map.empty 
 
-collectArgs :: Name -> [Exp] -> Map Name [LamDef]
+collectArgs :: Name -> [Exp Id] -> Map Name [LamDef]
 collectArgs n = foldr step Map.empty 
   where 
     step (Lam args bd) ac = Map.insertWith (++) n [LamDef args bd] ac  
     step e ac = Map.unionWith (++) (collectLam e) ac
+
+-- definition of a monad for defunctionalization 
+
+data Env 
+  = Env {
+      lambdas :: Map Name LamDef -- table containing collect lambdas 
+    , nameSupply :: NameSupply -- fresh name supply 
+    , functions :: [FunDef Id] -- functions generated
+    , contractName :: Maybe Name 
+    }
+
+type DefunM a = (StateT Env (ExceptT String Identity)) a 
+
+runDefunM :: Env -> DefunM a -> Either String (a, Env)
+runDefunM env m = runIdentity (runExceptT (runStateT m env))
+
+addFunDef :: FunDef Id -> DefunM ()
+addFunDef fd 
+  = modify (\ env -> env {functions = fd : functions env})
+
+-- initializing the environment
+
+initEnv :: Env 
+initEnv = Env Map.empty namePool [] Nothing 

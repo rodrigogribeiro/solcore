@@ -8,6 +8,7 @@ import Solcore.Desugarer.MatchCompiler
 import Solcore.Frontend.Lexer.SolcoreLexer
 import Solcore.Frontend.Parser.SolcoreParser
 import Solcore.Frontend.Pretty.SolcorePretty
+import Solcore.Frontend.TypeInference.SccAnalysis
 import Solcore.Frontend.TypeInference.TcContract
 import Solcore.Frontend.TypeInference.TcEnv
 
@@ -19,16 +20,20 @@ pipeline = do
   content <- readFile (fileName opts)
   case runAlex content parser of 
     Left err -> putStrLn err 
-    Right ast ->
-      case typeInfer ast of
+    Right ast -> do
+      r <- sccAnalysis ast 
+      case r of 
         Left err -> putStrLn err 
-        Right (c', env) -> 
-         do 
-            when (enableLog env) (mapM_ putStrLn (logs env))
-            res <- matchCompiler c' 
-            case res of 
-              Right r -> putStrLn $ pretty r 
-              Left err -> putStrLn err 
+        Right ast' -> do 
+          case typeInfer ast' of
+            Left err -> putStrLn err 
+            Right (c', env) -> 
+              do 
+                when (enableLog env) (mapM_ putStrLn (reverse $ logs env))
+                res <- matchCompiler c' 
+                case res of 
+                  Right r -> putStrLn $ pretty r 
+                  Left err -> putStrLn err 
 
 -- parsing command line arguments 
 

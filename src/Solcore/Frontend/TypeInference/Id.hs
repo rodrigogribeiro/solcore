@@ -21,4 +21,4 @@ instance HasType Id where
   fv (Id _ t) = fv t
 
 instance Pretty Id  where 
-  ppr (Id n t) = ppr n <+> text "::" <+> ppr t
+  ppr (Id n t) = ppr n

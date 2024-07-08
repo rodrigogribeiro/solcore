@@ -40,7 +40,7 @@ library
 
   -- cabal-fmt: expand src
   exposed-modules:
---      Solcore.Desugarer.Defunctionalization
+      Solcore.Desugarer.Defunctionalization
       Solcore.Desugarer.MatchCompiler
       Solcore.Desugarer.ReplaceWildcard
       Solcore.Desugarer.SolcoreDesugar
@@ -89,9 +89,5 @@ test-suite sol-core-tests
 
   build-depends:
     , sol-core
-    , hedgehog
-    , hspec
-    , hspec-core
-    , hspec-discover
-    , hspec-expectations
-    , hspec-hedgehog
+    , tasty
+    , tasty-hunit

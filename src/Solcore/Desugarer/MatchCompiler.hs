@@ -198,6 +198,12 @@ fifthCase es@(_ : _) d eqns@(_ : eqs)
           d' <- generateFunctions es d eqs 
           matchCompilerM es d' eq 
         Nothing -> throwError "Panic! Impossible --- fifthCase"
+    where
+      unsnoc [] = Nothing
+      unsnoc [x] = Just ([], x)
+      unsnoc (x:xs) = do
+        (ys, y) <- unsnoc xs
+        pure (x:ys, y)
 
 hasVarsBetweenConstrs :: Equations -> Bool
 hasVarsBetweenConstrs eqns 

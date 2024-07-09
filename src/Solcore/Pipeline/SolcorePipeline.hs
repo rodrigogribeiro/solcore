@@ -21,11 +21,12 @@ pipeline = do
   case runAlex content parser of 
     Left err -> putStrLn err 
     Right ast -> do
-      r <- sccAnalysis ast 
+      r <- sccAnalysis ast
       case r of 
         Left err -> putStrLn err 
-        Right ast' -> do 
-          case typeInfer ast' of
+        Right ast' -> do
+          r' <- typeInfer ast' 
+          case r' of
             Left err -> putStrLn err 
             Right (c', env) -> 
               do 

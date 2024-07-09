@@ -103,7 +103,7 @@ mkEdges table pos
         pure (ac' ++ ac)
       findPos k = case Map.lookup k pos of
                     Just n -> pure n 
-                    _      -> err k 
+                    _      -> pure minBound 
       err v = throwError ("Undefined name:\n" ++ (unName v))
 
 mkCallTable :: [Decl Name] -> SCC (Map Name [Name])
@@ -140,6 +140,7 @@ instance FreeVars (Exp Name) where
   fv (Con _ es) = fv es 
   fv (FieldAccess e _) = fv e 
   fv (Call _ n es) = n : fv es
+  fv (Var v) = [v]
   fv _ = []
 
 instance FreeVars (Stmt Name) where 

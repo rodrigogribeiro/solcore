@@ -2,6 +2,7 @@ module Solcore.Frontend.TypeInference.TcContract where
 
 import Control.Monad
 import Control.Monad.Except
+import Control.Monad.Trans
 
 import Data.Generics
 import Data.List
@@ -20,11 +21,9 @@ import Solcore.Primitives.Primitives
 
 -- top level type inference function 
 
-typeInfer :: CompUnit Name -> Either String (CompUnit Id, TcEnv) 
+typeInfer :: CompUnit Name -> IO (Either String (CompUnit Id, TcEnv))
 typeInfer c 
-  = case runTcM (tcCompUnit c) initTcEnv of 
-      Left err -> Left err 
-      Right c' -> Right c'
+  = runTcM (tcCompUnit c) initTcEnv  
 
 -- type inference for a compilation unit 
 
@@ -139,7 +138,7 @@ tcField (Field n t _)
 tcInstance :: Instance Name -> TcM (Instance Id)
 tcInstance (Instance ctx n ts t funs) 
   = do 
-      (funs', _) <- unzip <$> mapM tcFunDef funs
+      (funs', _, _) <- unzip3 <$> mapM tcFunDef funs
       pure (Instance ctx n ts t funs')
 
 -- type checking binding groups
@@ -148,7 +147,10 @@ tcBindGroup :: [Decl Name] -> TcM [Decl Id]
 tcBindGroup binds 
   = do
       funs <- mapM scanFun binds
-      (funs', schs) <- unzip <$> mapM tcFunDef funs
+      (funs', pss, ts) <- unzip3 <$> mapM tcFunDef funs
+      ts' <- withCurrentSubst ts  
+      schs <- mapM generalize (zip pss ts')
+      -- liftIO $ print ts'
       let names = map (sigName . funSignature) funs 
       let p (x,y) = pretty x ++ " :: " ++ pretty y
       mapM_ (uncurry extEnv) (zip names schs)
@@ -158,7 +160,7 @@ tcBindGroup binds
 
 -- type checking a single bind
 
-tcFunDef :: FunDef Name -> TcM (FunDef Id, Scheme)
+tcFunDef :: FunDef Name -> TcM (FunDef Id, [Pred], Ty)
 tcFunDef d@(FunDef sig bd) 
   = withLocalEnv do
       (params', ts) <- unzip <$> mapM addArg (sigParams sig)
@@ -172,9 +174,7 @@ tcFunDef d@(FunDef sig bd)
                            (sigContext sig) 
                            params' 
                            (Just rTy)
-      qts <- withCurrentSubst (ps1 ++ ps, t1)
-      sch <- generalize qts
-      pure (FunDef sig' bd', sch)
+      pure (FunDef sig' bd', ps ++ ps1, t1)
 
 scanFun :: Decl Name -> TcM (FunDef Name)
 scanFun (FunDecl (FunDef sig bd)) 
@@ -201,6 +201,7 @@ generalize (ps,t)
       t2 <- withCurrentSubst t1 
       let vs = fv (ps2,t2)
           sch = Forall (vs \\ envVars) (ps2 :=> t2)
+      -- info ["Generalized: ", pretty sch, " vars: ", show vs, " env: ", show envVars]
       s <- getSubst 
       return sch
 

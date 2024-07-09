@@ -9,7 +9,9 @@ import Solcore.Frontend.Syntax.Name
 data Tyvar 
   = TVar Name 
   deriving (Eq, Ord, Show, Data, Typeable)
-    
+   
+tyVarName :: Tyvar -> Name 
+tyVarName (TVar n) = n
 
 data Ty 
   = TyVar Tyvar      -- type variable 

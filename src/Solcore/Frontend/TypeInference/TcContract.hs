@@ -166,11 +166,12 @@ tcFunDef d@(FunDef sig bd)
       sch <- askEnv (sigName sig) 
       (ps :=> t) <- freshInst sch
       let t1 = foldr (:->) t' ts
-          sig' = Signature (sigName sig) 
+      s <- unify t t1 `wrapError` d
+      rTy <- withCurrentSubst t'
+      let sig' = Signature (sigName sig)
                            (sigContext sig) 
                            params' 
-                           (sigReturn sig) 
-      s <- unify t t1 `wrapError` d
+                           (Just rTy)
       qts <- withCurrentSubst (ps1 ++ ps, t1)
       sch <- generalize qts
       info ["Before quantify:", pretty (sigName sig), " - ", pretty $ apply s t1]

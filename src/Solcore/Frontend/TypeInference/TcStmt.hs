@@ -43,7 +43,8 @@ tcStmt e@(Let n mt me)
                         return (Just e', ps, t1)
                       (Nothing, Nothing) -> 
                         (Nothing, [],) <$> freshTyVar
-      extEnv n (monotype $ stack tf) 
+      extEnv n (monotype $ stack tf)
+      info ["Typing for ", pretty n, " is ", pretty $ monotype $ stack tf]
       pure (Let n mt me', psf, unit)
 tcStmt (StmtExp e)
   = do 

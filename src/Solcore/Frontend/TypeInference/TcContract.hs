@@ -174,7 +174,6 @@ tcFunDef d@(FunDef sig bd)
                            (Just rTy)
       qts <- withCurrentSubst (ps1 ++ ps, t1)
       sch <- generalize qts
-      info ["Before quantify:", pretty (sigName sig), " - ", pretty $ apply s t1]
       pure (FunDef sig' bd', sch)
 
 scanFun :: Decl Name -> TcM (FunDef Name)

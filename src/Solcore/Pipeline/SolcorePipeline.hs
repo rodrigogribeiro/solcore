@@ -11,6 +11,7 @@ import Solcore.Frontend.Pretty.SolcorePretty
 import Solcore.Frontend.TypeInference.SccAnalysis
 import Solcore.Frontend.TypeInference.TcContract
 import Solcore.Frontend.TypeInference.TcEnv
+import Solcore.Desugarer.Specialise
 
 -- main compiler driver function 
 
@@ -32,7 +33,9 @@ pipeline = do
                 when (enableLog env) (mapM_ putStrLn (reverse $ logs env))
                 res <- matchCompiler c' 
                 case res of 
-                  Right r -> putStrLn $ pretty r 
+                  Right r ->  do
+                     r' <- specialiseCompUnit r
+                     putStrLn $ pretty r'
                   Left err -> putStrLn err 
 
 -- parsing command line arguments 

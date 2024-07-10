@@ -28,7 +28,7 @@ pipeline = do
         when (enableLog env) (mapM_ putStrLn (reverse $ logs env))
         r4 <- matchCompiler c' 
         withErr r4 $ \ res -> do 
-          r5 <- specialiseCompUnit res
+          r5 <- specialiseCompUnit res env
           putStrLn (pretty r5)
     
 withErr :: Either String a -> (a -> IO ()) -> IO () 

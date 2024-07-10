@@ -2,6 +2,7 @@ module Solcore.Frontend.TypeInference.TcStmt where
 
 import Control.Monad
 import Control.Monad.Except
+import Control.Monad.Trans 
 
 import Data.Generics
 import Data.List
@@ -30,7 +31,7 @@ tcStmt e@(lhs := rhs)
       extSubst s
       pure (lhs1 := rhs1, apply s (ps1 ++ ps2), unit)
 tcStmt e@(Let n mt me)
-  = do 
+  = do
       (me', psf, tf) <- case (mt, me) of
                       (Just t, Just e) -> do 
                         (e', ps1,t1) <- tcExp e 
@@ -43,14 +44,14 @@ tcStmt e@(Let n mt me)
                         return (Just e', ps, t1)
                       (Nothing, Nothing) -> 
                         (Nothing, [],) <$> freshTyVar
-      extEnv n (monotype $ stack tf) 
-      pure (Let n mt me', psf, unit)
+      extEnv n (monotype tf)
+      pure (Let (Id n tf) mt me', psf, unit)
 tcStmt (StmtExp e)
   = do 
       (e', ps', t') <- tcExp e 
       pure (StmtExp e', ps', t')
 tcStmt m@(Return e)
-  = do 
+  = do
       (e', ps, t) <- tcExp e
       pure (Return e', ps, t)
 tcStmt (Match es eqns) 
@@ -131,7 +132,7 @@ tcExp (Lit l)
 tcExp (Var n) 
   = do 
       s <- askEnv n 
-      (ps :=> t) <- freshInst s 
+      (ps :=> t) <- freshInst s
       pure (Var (Id n t), ps, t)
 tcExp e@(Con n es)
   = do
@@ -147,7 +148,7 @@ tcExp e@(Con n es)
       -- checking if the constructor belongs to type tn 
       checkConstr tn n
       let ps' = concat (ps : pss)
-      pure (Con n es', apply s ps', apply s t')
+      pure (Con (Id n t) es', apply s ps', apply s t')
 tcExp (FieldAccess e n) 
   = do
       -- infering expression type 
@@ -157,11 +158,11 @@ tcExp (FieldAccess e n)
       -- getting field type 
       s <- askField tn n 
       (ps' :=> t') <- freshInst s 
-      pure (FieldAccess e' n, ps ++ ps', t')
+      pure (FieldAccess e' (Id n t'), ps ++ ps', t')
 tcExp (Call me n args)
   = tcCall me n args 
 tcExp e@(Lam args bd)
-  = withLocalSubst do 
+  = do 
       (args', ts') <- unzip <$> mapM addArg args 
       (bd',ps,t') <- tcBody bd 
       s <- getSubst
@@ -190,15 +191,15 @@ tcCall :: Maybe (Exp Name) -> Name -> [Exp Name] -> TcM (Exp Id, [Pred], Ty)
 tcCall Nothing n args 
   = do 
       s <- askEnv n
-      info ["Typing the call:", pretty n]
+      -- info ["Typing the call:", pretty n]
       (ps :=> t) <- freshInst s
       t' <- freshTyVar
       (es', pss', ts') <- unzip3 <$> mapM tcExp args
       s' <- unify t (foldr (:->) t' ts')
-      info ["Unifying ", pretty t, " with ", pretty $ foldr (:->) t' ts']
+      -- info ["Unifying ", pretty t, " with ", pretty $ foldr (:->) t' ts']
       let ps' = foldr union [] (ps : pss')
-      info ["Result for call:", pretty n, " is ", pretty $ apply s' t']
-      withCurrentSubst (Call Nothing n es', ps', t')
+      -- info ["Result for call:", pretty n, " is ", pretty $ apply s' t']
+      withCurrentSubst (Call Nothing (Id n t') es', ps', t')
 tcCall (Just e) n args 
   = do 
       (e', ps , ct) <- tcExp e
@@ -208,7 +209,7 @@ tcCall (Just e) n args
       (es', pss', ts') <- unzip3 <$> mapM tcExp args 
       s' <- unify t (foldr (:->) t' ts')
       let ps' = foldr union [] ((ps ++ ps1) : pss')
-      withCurrentSubst (Call (Just e') n es', ps', t')
+      withCurrentSubst (Call (Just e') (Id n t') es', ps', t')
 
 addArg :: Param Name -> TcM (Param Id, Ty) 
 addArg p@(Typed n t) 

@@ -19,24 +19,20 @@ pipeline :: IO ()
 pipeline = do 
   opts <- argumentsParser
   content <- readFile (fileName opts)
-  case runAlex content parser of 
-    Left err -> putStrLn err 
-    Right ast -> do
-      r <- sccAnalysis ast 
-      case r of 
-        Left err -> putStrLn err 
-        Right ast' -> do 
-          case typeInfer ast' of
-            Left err -> putStrLn err 
-            Right (c', env) -> 
-              do 
-                when (enableLog env) (mapM_ putStrLn (reverse $ logs env))
-                res <- matchCompiler c' 
-                case res of 
-                  Right r ->  do
-                     r' <- specialiseCompUnit r
-                     putStrLn $ pretty r'
-                  Left err -> putStrLn err 
+  let r1 = runAlex content parser 
+  withErr r1 $ \ ast -> do 
+    r2 <- sccAnalysis ast 
+    withErr r2 $ \ ast' -> do 
+      r3 <- typeInfer ast' 
+      withErr r3 $ \ (c', env) -> do 
+        when (enableLog env) (mapM_ putStrLn (reverse $ logs env))
+        r4 <- matchCompiler c' 
+        withErr r4 $ \ res -> do 
+          r5 <- specialiseCompUnit res
+          putStrLn (pretty r5)
+    
+withErr :: Either String a -> (a -> IO ()) -> IO () 
+withErr r f = either putStrLn f r
 
 -- parsing command line arguments 
 

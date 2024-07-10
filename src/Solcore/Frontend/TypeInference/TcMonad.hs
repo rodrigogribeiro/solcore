@@ -2,7 +2,6 @@ module Solcore.Frontend.TypeInference.TcMonad where
 
 import Control.Monad
 import Control.Monad.Except
-import Control.Monad.Identity
 import Control.Monad.State 
 
 import Data.List 
@@ -20,10 +19,10 @@ import Solcore.Primitives.Primitives
 
 -- definition of type inference monad infrastructure 
 
-type TcM a = StateT TcEnv (ExceptT String Identity) a 
+type TcM a = StateT TcEnv (ExceptT String IO) a 
 
-runTcM :: TcM a -> TcEnv -> Either String (a, TcEnv)
-runTcM m env = runIdentity (runExceptT (runStateT m env))
+runTcM :: TcM a -> TcEnv -> IO (Either String (a, TcEnv))
+runTcM m env = runExceptT (runStateT m env)
 
 freshVar :: TcM Tyvar 
 freshVar 
@@ -57,7 +56,7 @@ freshInst (Forall vs qt)
 renameVars :: HasType a => [Tyvar] -> a -> TcM a 
 renameVars vs t 
   = do 
-      s <- mapM (\ v -> (v,) <$> freshTyVar) vs 
+      s <- mapM (\ v -> (v,) <$> freshTyVar) vs
       pure $ apply (Subst s) t
 
 -- substitution 
@@ -164,7 +163,7 @@ maybeAskEnv n = gets (Map.lookup n . ctx)
 
 askEnv :: Name -> TcM Scheme 
 askEnv n 
-  = do 
+  = do
       s <- maybeAskEnv n
       maybe (undefinedName n) pure s
 

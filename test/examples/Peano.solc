@@ -1,11 +1,10 @@
 contract Peano {
   data Nat = Zero | Succ[Nat]
-  data Bool = True | False 
 
-  function natInd (f, g, n) {
+  function natInd (step,v,n) {
     match n {
-    | Zero => return f(Zero) ;
-    | Succ[m] => return g(natInd(f,g,m),m);
+    | Zero => return v ;
+    | Succ[m] => return step(m, natInd(step,v,m));
     };
   }
 }

@@ -150,7 +150,6 @@ tcBindGroup binds
       (funs', pss, ts) <- unzip3 <$> mapM tcFunDef funs
       ts' <- withCurrentSubst ts  
       schs <- mapM generalize (zip pss ts')
-      -- liftIO $ print ts'
       let names = map (sigName . funSignature) funs 
       let p (x,y) = pretty x ++ " :: " ++ pretty y
       mapM_ (uncurry extEnv) (zip names schs)
@@ -201,8 +200,6 @@ generalize (ps,t)
       t2 <- withCurrentSubst t1 
       let vs = fv (ps2,t2)
           sch = Forall (vs \\ envVars) (ps2 :=> t2)
-      -- info ["Generalized: ", pretty sch, " vars: ", show vs, " env: ", show envVars]
-      s <- getSubst 
       return sch
 
 -- context reduction 

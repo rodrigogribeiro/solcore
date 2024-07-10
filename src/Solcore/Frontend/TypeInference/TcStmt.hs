@@ -45,10 +45,7 @@ tcStmt e@(Let n mt me)
                       (Nothing, Nothing) -> 
                         (Nothing, [],) <$> freshTyVar
       extEnv n (monotype tf)
-      -- ctx <- envList 
-      -- liftIO $ putStrLn $ unlines $ map (\ (n,t) -> pretty n ++ " :: " ++ pretty t) ctx
-      -- info ["Typing for ", pretty n, " is ", pretty $ monotype tf]
-      pure (Let n mt me', psf, unit)
+      pure (Let (Id n tf) mt me', psf, unit)
 tcStmt (StmtExp e)
   = do 
       (e', ps', t') <- tcExp e 
@@ -151,7 +148,7 @@ tcExp e@(Con n es)
       -- checking if the constructor belongs to type tn 
       checkConstr tn n
       let ps' = concat (ps : pss)
-      pure (Con n es', apply s ps', apply s t')
+      pure (Con (Id n t) es', apply s ps', apply s t')
 tcExp (FieldAccess e n) 
   = do
       -- infering expression type 
@@ -161,7 +158,7 @@ tcExp (FieldAccess e n)
       -- getting field type 
       s <- askField tn n 
       (ps' :=> t') <- freshInst s 
-      pure (FieldAccess e' n, ps ++ ps', t')
+      pure (FieldAccess e' (Id n t'), ps ++ ps', t')
 tcExp (Call me n args)
   = tcCall me n args 
 tcExp e@(Lam args bd)
@@ -202,7 +199,7 @@ tcCall Nothing n args
       -- info ["Unifying ", pretty t, " with ", pretty $ foldr (:->) t' ts']
       let ps' = foldr union [] (ps : pss')
       -- info ["Result for call:", pretty n, " is ", pretty $ apply s' t']
-      withCurrentSubst (Call Nothing n es', ps', t')
+      withCurrentSubst (Call Nothing (Id n t') es', ps', t')
 tcCall (Just e) n args 
   = do 
       (e', ps , ct) <- tcExp e
@@ -212,7 +209,7 @@ tcCall (Just e) n args
       (es', pss', ts') <- unzip3 <$> mapM tcExp args 
       s' <- unify t (foldr (:->) t' ts')
       let ps' = foldr union [] ((ps ++ ps1) : pss')
-      withCurrentSubst (Call (Just e') n es', ps', t')
+      withCurrentSubst (Call (Just e') (Id n t') es', ps', t')
 
 addArg :: Param Name -> TcM (Param Id, Ty) 
 addArg p@(Typed n t) 

@@ -12,7 +12,7 @@ type Equations a = [Equation a]
 
 data Stmt a
   = (Exp a) := (Exp a)                  -- assignment
-  | Let Name (Maybe Ty) (Maybe (Exp a)) -- local variable  
+  | Let a (Maybe Ty) (Maybe (Exp a)) -- local variable  
   | StmtExp (Exp a)                     -- expression level statements
   | Return (Exp a)                      -- return statements
   | Match [Exp a] (Equations a)         -- pattern matching 
@@ -29,10 +29,10 @@ data Param a
 
 data Exp a 
   = Var a                              -- variable  
-  | Con Name [Exp a]                   -- data type constructor
-  | FieldAccess (Exp a) Name           -- field access  
+  | Con a [Exp a]                      -- data type constructor
+  | FieldAccess (Exp a) a              -- field access  
   | Lit Literal                        -- literal 
-  | Call (Maybe (Exp a)) Name [Exp a]  -- function call
+  | Call (Maybe (Exp a)) a [Exp a]     -- function call
   | Lam [Param a] (Body a)               -- lambda-abstraction
   deriving (Eq, Ord, Show, Data, Typeable)
 

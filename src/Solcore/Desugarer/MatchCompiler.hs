@@ -98,8 +98,9 @@ instance Compile (Stmt Id) where
   type Res (Stmt Id) = [Stmt Id]
 
   compile (Match es eqns) 
-    = do 
-        let def = [StmtExp $ generateCall matchError [errorLit]]
+    = do
+        v <- matchError 
+        let def = [StmtExp $ generateCall v [errorLit]]
         matchCompilerM es def eqns 
   compile s = return [s]
 
@@ -130,13 +131,13 @@ thirdCase _ _ []
   = throwError "Panic! Impossible --- thirdCase."
 thirdCase (e : es) d eqns 
   = do 
-      (Id n t) <- freshId
+      x@(Id n t) <- freshId
       let 
           vs = foldr (union . L.head . L.fromList . map vars . fst) [] eqns 
           s  = map (\ vi -> (vi, n)) vs 
           eqns' = map (\ (_ : ps, ss) -> (ps, apply s ss)) eqns
       res <- matchCompilerM es d eqns' 
-      return (Let n (Just t) (Just e) : res) 
+      return (Let x (Just t) (Just e) : res) 
 
 -- Implementation of the fourth case 
 
@@ -181,8 +182,9 @@ generateFunction es d eqn
       n <- newFunName
       ss <- matchCompilerM es d eqn 
       let fd = FunDef (Signature n [] [] Nothing) ss 
-      tell [fd] 
-      return [StmtExp $ generateCall n []] 
+      tell [fd]
+      v <- (TyVar . TVar) <$> freshName 
+      return [StmtExp $ generateCall (Id n v) []] 
 
 newFunName :: CompilerM Name 
 newFunName 
@@ -321,13 +323,18 @@ instance Apply Pat where
 
 matchErrorCase :: CompilerM [Stmt Id]  
 matchErrorCase 
-  = return [StmtExp $ generateCall matchError [errorLit]]
+  = do
+      v <- matchError  
+      return [StmtExp $ generateCall v [errorLit]]
 
-generateCall :: Name -> [Exp Id] -> Exp Id
+generateCall :: Id -> [Exp Id] -> Exp Id
 generateCall = Call Nothing
 
-matchError :: Name 
-matchError = Name "revert"
+matchError :: CompilerM Id   
+matchError 
+  = do
+      v <- (TyVar . TVar) <$> freshName
+      pure (Id (Name "revert") v)
 
 errorLit :: Exp Id  
 errorLit = Lit $ StrLit "Incomplete matching"

@@ -194,9 +194,8 @@ tcCall Nothing n args
       (ps :=> t) <- freshInst s
       t' <- freshTyVar
       (es', pss', ts') <- unzip3 <$> mapM tcExp args
-      info ("Arguments: " : map foo (zip args ts'))
       s' <- unify t (foldr (:->) t' ts')
-      -- info ["Unifying ", pretty t, " with ", pretty $ foldr (:->) t' ts']
+      info ["Unifying ", pretty t, " with ", pretty $ foldr (:->) t' ts']
       let ps' = foldr union [] (ps : pss')
       info ["Result for call:", pretty n, " is ", pretty $ apply s' t']
       withCurrentSubst (Call Nothing n es', ps', t')

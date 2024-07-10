@@ -23,4 +23,11 @@ contract Logic {
     | True, True => return True;
     };
   }
+
+  function elim (f, g, x) {
+    match x {
+    | True => return f(x);
+    | False => return g(x);
+    };
+  }
 }

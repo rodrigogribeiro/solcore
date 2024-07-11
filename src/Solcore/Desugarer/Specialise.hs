@@ -20,6 +20,7 @@ data SpecState = SpecState
   { spResTable :: Table [Resolution]
   , specTable :: Table TcFunDef
   , spTypeTable :: Table TypeInfo
+  , spEnv :: TcEnv
   }
 
 type SM a = StateT SpecState IO a
@@ -31,11 +32,19 @@ writeln = liftIO  . putStrLn
 writes :: MonadIO m => [String] -> m ()
 writes = writeln . concat
 
+withLocalState :: SM a -> SM a
+withLocalState m = do
+    s <- get
+    a <- m
+    put s
+    return a
+
 initSpecState :: TcEnv -> SpecState
 initSpecState env = SpecState
     { spResTable = Map.empty
     , specTable = Map.empty
     , spTypeTable = typeTable env
+    , spEnv = env
     }
 
 addResolution :: Name -> Ty -> TcFunDef -> SM ()
@@ -58,12 +67,17 @@ lookupResolution name ty = gets (Map.lookup name . spResTable) >>= findMatch ty 
     | otherwise = firstMatch etyp rest
 
 specialiseCompUnit :: CompUnit Id -> TcEnv -> IO (CompUnit Id)
-specialiseCompUnit (CompUnit imports contracts) env = do
-    contracts' <- forM contracts (\c -> runSM (specialiseContract c) env)
-    return $ CompUnit imports contracts'
+specialiseCompUnit compUnit env = flip runSM env do
+    addGlobalResolutions compUnit
+    contracts' <- forM (contracts compUnit) specialiseContract
+    return $ compUnit { contracts = contracts' }
+
+addGlobalResolutions :: CompUnit Id -> SM ()
+addGlobalResolutions _ = return ()   -- TODO when global declarationsare added
 
 specialiseContract :: Contract Id -> SM (Contract Id)
-specialiseContract (Contract name args decls) = do
+specialiseContract (Contract name args decls) = withLocalState do
+    addContractResolutions (Contract name args decls)
     forM_ decls processDecl
     return $ Contract name args decls
     where
@@ -78,6 +92,19 @@ specialiseContract (Contract name args decls) = do
         -- liftIO $ print body
       processDecl _ = pure ()
 
+addContractResolutions :: Contract Id -> SM ()
+addContractResolutions (Contract name args decls) = do
+  forM_ decls addDeclResolution
+
+addDeclResolution :: Decl Id -> SM ()
+addDeclResolution (FunDecl fd) = do
+  let sig = funSignature fd
+  let name = sigName sig
+  let funType = typeOfTcFunDef fd
+  addResolution name funType fd
+  writes ["! addDeclResolution: ", show name, " : ", pretty funType]
+addDeclResolution (InstDecl inst) = writeln "WARN: Instance declaration not supported yet"
+addDeclResolution _ = return ()
 
 typeOfTcExp :: TcExp -> Ty
 typeOfTcExp (Var i)               = idType i
@@ -102,7 +129,7 @@ typeOfTcBody [s]   = typeOfTcStmt s
 typeOfTcBody (_:b) = typeOfTcBody b
 
 typeOfTcParam :: Param Id -> Ty
-typeOfTcParam (Typed _ t) = t
+typeOfTcParam (Typed i t)  = idType i  -- seems better than t - see issue #6
 typeOfTcParam (Untyped i) = idType i
 
 typeOfTcSignature :: Signature Id -> Ty

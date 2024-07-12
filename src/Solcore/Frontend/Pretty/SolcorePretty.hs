@@ -166,7 +166,7 @@ pprParams = parens . commaSep . map ppr
 
 instance Pretty a => Pretty (Param a) where 
   ppr (Typed n ty) 
-    = ppr n
+    = ppr n <+> colon <+> ppr ty
   ppr (Untyped n)
     = ppr n
 

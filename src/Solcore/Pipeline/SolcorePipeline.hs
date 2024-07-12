@@ -29,8 +29,9 @@ pipeline = do
         r4 <- matchCompiler c' 
         withErr r4 $ \ res -> do 
           r5 <- specialiseCompUnit res env
+          putStrLn "Specialised contract:"
           putStrLn (pretty r5)
-    
+          return ()
 withErr :: Either String a -> (a -> IO ()) -> IO () 
 withErr r f = either putStrLn f r
 

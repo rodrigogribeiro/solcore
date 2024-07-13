@@ -22,7 +22,6 @@ data Stmt a
 type Body a = [Stmt a]
 type YulBlock = [YulStmt]
 
-
 data YulStmt 
   = YAssign [Name] YulExp
   | YBlock YulBlock

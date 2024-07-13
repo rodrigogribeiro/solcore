@@ -177,7 +177,61 @@ instance Pretty a => Pretty (Stmt a) where
       (parens $ commaSep $ map ppr e) <+> 
       lbrace $$ 
       vcat (map ppr eqns) $$ 
+      rbrace
+  ppr (Asm yblk) 
+    = text "assembly" <+> lbrace $$ 
+      ppr yblk $$
       rbrace 
+
+instance Pretty YulStmt where 
+  ppr (YAssign ns e) 
+    = commaSep (map ppr ns) <+> 
+      text ":=" <+> 
+      ppr e 
+  ppr (YBlock yblk) 
+    = ppr yblk  
+  ppr (YLet ns e)
+    = text "let" <+> 
+      commaSep (map ppr ns) <+>
+      text ":=" <+> 
+      ppr e 
+  ppr (YExp e) = ppr e 
+  ppr (YIf e yblk)
+    = text "if" <+> ppr e <+> ppr yblk 
+  ppr (YSwitch e cs d)
+    = text "switch" <+> ppr e <+> 
+      lbrace $$
+      nest 3 (vcat (map ppr cs ++ [pprDefault d])) $$
+      rbrace 
+  ppr (YFor init e bdy upd)
+    = text "for" <+> 
+      ppr init <+> 
+      ppr e <+> 
+      ppr bdy <+> 
+      ppr upd
+  ppr YContinue = text "continue"
+  ppr YBreak = text "break"
+  ppr YLeave = text "leave"
+
+instance Pretty (Literal, YulBlock) where 
+  ppr (l,yblk) = text "case " <+> ppr l <+> ppr yblk
+
+instance Pretty YulBlock where 
+  ppr yblk 
+    = lbrace $$ 
+      nest 3 (vcat (map ppr yblk)) $$ 
+      rbrace 
+
+instance Pretty YulExp where 
+  ppr (YLit l) = ppr l 
+  ppr (YIdent n) = ppr n 
+  ppr (YCall n es) 
+    = ppr n <> parens (commaSep (map ppr es))
+
+pprDefault :: Maybe YulBlock -> Doc 
+pprDefault Nothing = empty 
+pprDefault (Just yblk) 
+  = text "default" <+> ppr yblk
 
 instance Pretty a => Pretty (Equation a) where 
   ppr (p,ss) 

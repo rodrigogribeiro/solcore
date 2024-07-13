@@ -30,13 +30,37 @@ typeInfer c
 tcCompUnit :: CompUnit Name -> TcM (CompUnit Id)
 tcCompUnit (CompUnit imps cs)
   = do 
-      loadImports imps 
-      CompUnit imps <$> mapM tcContract cs 
+      loadImports imps
+      mapM_ checkTopDecl cs 
+      CompUnit imps <$> mapM tcTopDecl cs 
+
+tcTopDecl :: TopDecl Name -> TcM (TopDecl Id)
+tcTopDecl (TContr c) 
+  = TContr <$> tcContract c
+tcTopDecl (TFunDef fd)
+  = undefined 
+tcTopDecl (TClassDef c)
+  = undefined 
+tcTopDecl (TInstDef is)
+  = undefined 
+tcTopDecl (TMutualDef ts)
+  = undefined 
+tcTopDecl (TDataDef d)
+  = pure (TDataDef d)
+
+checkTopDecl :: TopDecl Name -> TcM ()
+checkTopDecl (TClassDef c) 
+  = checkClass c 
+checkTopDecl (TInstDef is)
+  = checkInstance is 
+checkTopDecl (TDataDef dt)
+  = checkDataType dt 
+checkTopDecl _ = pure ()
 
 -- TODO load import information
 
 loadImports :: [Import] -> TcM ()
-loadImports _ = return () 
+loadImports _ = return ()
 
 -- type inference for contracts 
 
@@ -62,18 +86,14 @@ initializeEnv (Contract n vs decls)
       setCurrentContract n (length vs) 
       mapM_ checkDecl decls 
 
-checkDecl :: Decl Name -> TcM ()
-checkDecl (DataDecl dt) 
+checkDecl :: ContractDecl Name -> TcM ()
+checkDecl (CDataDecl dt) 
   = checkDataType dt 
-checkDecl (ClassDecl c)
-  = checkClass c 
-checkDecl (InstDecl i)
-  = checkInstance i 
-checkDecl (FunDecl (FunDef sig _))
+checkDecl (CFunDecl (FunDef sig _))
   = extSignature sig
-checkDecl (FieldDecl fd)
+checkDecl (CFieldDecl fd)
   = tcField fd >> return ()
-checkDecl (MutualDecl ds) 
+checkDecl (CMutualDecl ds) 
   = mapM_ checkDecl ds
 checkDecl _ = return ()
 
@@ -104,19 +124,20 @@ checkDataType (DataTy n vs constrs)
 
 -- type inference for declarations
 
-tcDecl :: Decl Name -> TcM (Decl Id)
-tcDecl (FieldDecl fd) = FieldDecl <$> tcField fd
-tcDecl (InstDecl id) = InstDecl <$> tcInstance id 
-tcDecl d@(FunDecl _) 
+tcDecl :: ContractDecl Name -> TcM (ContractDecl Id)
+tcDecl (CFieldDecl fd) = CFieldDecl <$> tcField fd
+tcDecl (CFunDecl d) 
   = do 
       d' <- tcBindGroup [d]
       case d' of 
         [] -> throwError "Impossible! Empty function binding!"
-        (x : _) -> pure x
-tcDecl (MutualDecl ds) = MutualDecl <$> tcBindGroup ds 
-tcDecl (ConstrDecl cd) = ConstrDecl <$> tcConstructor cd 
-tcDecl (DataDecl d) = pure (DataDecl d)
-tcDecl (SymDecl d) = pure (SymDecl d)
+        (x : _) -> pure (CFunDecl x)
+tcDecl (CMutualDecl ds) 
+  = do  
+      ds' <- CFunDecl <$> tcBindGroup ds 
+      pure (CMutualDecl ds')
+tcDecl (CConstrDecl cd) = CConstrDecl <$> tcConstructor cd 
+tcDecl (CDataDecl d) = pure (CDataDecl d)
 
 -- type checking fields
 
@@ -143,7 +164,7 @@ tcInstance (Instance ctx n ts t funs)
 
 -- type checking binding groups
 
-tcBindGroup :: [Decl Name] -> TcM [Decl Id]
+tcBindGroup :: [FunDef Name] -> TcM [FunDef Id]
 tcBindGroup binds 
   = do
       funs <- mapM scanFun binds
@@ -154,7 +175,7 @@ tcBindGroup binds
       let p (x,y) = pretty x ++ " :: " ++ pretty y
       mapM_ (uncurry extEnv) (zip names schs)
       info ["Results: ", unlines $ map p $ zip names schs]
-      pure (FunDecl <$> funs')
+      pure funs'
 
 
 -- type checking a single bind
@@ -175,8 +196,8 @@ tcFunDef d@(FunDef sig bd)
                            (Just rTy)
       pure (FunDef sig' bd', ps ++ ps1, t1)
 
-scanFun :: Decl Name -> TcM (FunDef Name)
-scanFun (FunDecl (FunDef sig bd)) 
+scanFun :: FunDef Name -> TcM (FunDef Name)
+scanFun (FunDef sig bd)
   = flip FunDef bd <$> fillSignature sig 
     where 
       f (Typed n t) = pure $ Typed n t

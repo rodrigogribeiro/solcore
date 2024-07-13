@@ -55,12 +55,12 @@ library
       Solcore.Frontend.TypeInference.Id
       Solcore.Frontend.TypeInference.NameSupply
       Solcore.Frontend.TypeInference.SccAnalysis
-      -- Solcore.Frontend.TypeInference.TcContract
-      -- Solcore.Frontend.TypeInference.TcEnv
-      -- Solcore.Frontend.TypeInference.TcMonad
-      -- Solcore.Frontend.TypeInference.TcStmt
+      Solcore.Frontend.TypeInference.TcContract
+      Solcore.Frontend.TypeInference.TcEnv
+      Solcore.Frontend.TypeInference.TcMonad
+      Solcore.Frontend.TypeInference.TcStmt
       Solcore.Frontend.TypeInference.TcSubst
-      -- Solcore.Frontend.TypeInference.TcUnify
+      Solcore.Frontend.TypeInference.TcUnify
       -- -- Solcore.Pipeline.SolcorePipeline
       Solcore.Primitives.Primitives
 

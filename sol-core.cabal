@@ -40,10 +40,10 @@ library
 
   -- cabal-fmt: expand src
   exposed-modules:
---      Solcore.Desugarer.Defunctionalization
-      Solcore.Desugarer.MatchCompiler
-      Solcore.Desugarer.ReplaceWildcard
-      Solcore.Desugarer.SolcoreDesugar
+      -- Solcore.Desugarer.Defunctionalization
+      -- Solcore.Desugarer.MatchCompiler
+      -- Solcore.Desugarer.ReplaceWildcard
+      -- Solcore.Desugarer.SolcoreDesugar
       Solcore.Frontend.Lexer.SolcoreLexer
       Solcore.Frontend.Parser.SolcoreParser
       Solcore.Frontend.Pretty.SolcorePretty
@@ -54,14 +54,14 @@ library
       Solcore.Frontend.Syntax.Stmt
       Solcore.Frontend.TypeInference.Id
       Solcore.Frontend.TypeInference.NameSupply
-      Solcore.Frontend.TypeInference.SccAnalysis
-      Solcore.Frontend.TypeInference.TcContract
-      Solcore.Frontend.TypeInference.TcEnv
-      Solcore.Frontend.TypeInference.TcMonad
-      Solcore.Frontend.TypeInference.TcStmt
+      -- Solcore.Frontend.TypeInference.SccAnalysis
+      -- Solcore.Frontend.TypeInference.TcContract
+      -- Solcore.Frontend.TypeInference.TcEnv
+      -- Solcore.Frontend.TypeInference.TcMonad
+      -- Solcore.Frontend.TypeInference.TcStmt
       Solcore.Frontend.TypeInference.TcSubst
-      Solcore.Frontend.TypeInference.TcUnify
-      Solcore.Pipeline.SolcorePipeline
+      -- Solcore.Frontend.TypeInference.TcUnify
+      -- -- Solcore.Pipeline.SolcorePipeline
       Solcore.Primitives.Primitives
 
   hs-source-dirs:

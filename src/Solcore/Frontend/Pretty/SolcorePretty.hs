@@ -36,6 +36,15 @@ instance Pretty Import where
   ppr (Import qn) 
     = text "import" <+> ppr qn <+> semi
 
+instance Pretty a => Pretty (TopDecl a) where 
+  ppr (TContr c) = ppr c 
+  ppr (TFunDef fd) = ppr fd 
+  ppr (TClassDef c) = ppr c 
+  ppr (TInstDef is) = ppr is 
+  ppr (TMutualDef ts)
+    = vcat (map ppr ts)
+  ppr (TDataDef d) = ppr d
+
 instance Pretty a => Pretty (Contract a) where 
   ppr (Contract n ts ds)
     = text "contract" <+> 
@@ -45,22 +54,16 @@ instance Pretty a => Pretty (Contract a) where
       nest 3 (vcat (map ppr ds)) $$ 
       rbrace 
 
-instance Pretty a => Pretty (Decl a) where 
-  ppr (DataDecl dt)
+instance Pretty a => Pretty (ContractDecl a) where 
+  ppr (CDataDecl dt)
     = ppr dt 
-  ppr (SymDecl ts)
-    = ppr ts 
-  ppr (ClassDecl cd)
-    = ppr cd 
-  ppr (InstDecl id)
-    = ppr id 
-  ppr (FieldDecl fd)
+  ppr (CFieldDecl fd)
     = ppr fd 
-  ppr (FunDecl fd)
+  ppr (CFunDecl fd)
     = ppr fd
-  ppr (MutualDecl ds) 
+  ppr (CMutualDecl ds) 
     = vcat (map ppr ds)
-  ppr (ConstrDecl c)
+  ppr (CConstrDecl c)
     = ppr c 
 
 instance Pretty a => Pretty (Constructor a) where 
@@ -89,16 +92,6 @@ instance Pretty Constr where
 pprConstrArgs :: [Ty] -> Doc  
 pprConstrArgs [] = empty 
 pprConstrArgs ts = commaSep $ map ppr ts 
-
-instance Pretty TySym where 
-  ppr (TySym n vs ty)
-    = hsep [
-            text "type"
-           , ppr n 
-           , pprTyParams (map TyVar vs) 
-           , equals
-           , ppr ty 
-           ]
 
 instance Pretty a => Pretty (Class a) where 
   ppr (Class ps n vs v sigs)

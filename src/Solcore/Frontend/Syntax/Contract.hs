@@ -11,8 +11,17 @@ import Solcore.Frontend.Syntax.Ty
 data CompUnit a
   = CompUnit {
       imports :: [Import]
-    , contracts :: [Contract a]
+    , contracts :: [TopDecl a]
     } deriving (Eq, Ord, Show, Data, Typeable)
+
+data TopDecl a 
+  = TContr (Contract a)
+  | TFunDef (FunDef a)
+  | TClassDef (Class a)
+  | TInstDef (Instance a)
+  | TMutualDef [TopDecl a]
+  | TDataDef DataTy 
+  deriving (Eq, Ord, Show, Data, Typeable)
 
 newtype Import 
   = Import { unImport :: QualName }
@@ -24,7 +33,7 @@ data Contract a
   = Contract {
       name :: Name
     , tyParams :: [Tyvar]
-    , decls :: [Decl a]
+    , decls :: [ContractDecl a]
     } deriving (Eq, Ord, Show, Data, Typeable)
 
 -- definition of a algebraic data type 
@@ -48,14 +57,6 @@ data Constructor a
   = Constructor {
       constrParams :: [Param a]
     , constrBody :: (Body a)
-    } deriving (Eq, Ord, Show, Data, Typeable)
--- definition of a synonym 
-
-data TySym 
-  = TySym {
-      symName :: Name 
-    , varList :: [Tyvar]
-    , symRhs :: Ty 
     } deriving (Eq, Ord, Show, Data, Typeable)
 
 -- definition of classes and instances 
@@ -103,13 +104,10 @@ data FunDef a
     , funDefBody :: Body a 
     } deriving (Eq, Ord, Show, Data, Typeable)
 
-data Decl a 
-  = DataDecl DataTy 
-  | SymDecl TySym
-  | ClassDecl (Class a)
-  | InstDecl (Instance a)
-  | FieldDecl (Field a)
-  | FunDecl (FunDef a)
-  | MutualDecl [Decl a] -- used only after SCC analysis
-  | ConstrDecl (Constructor a)
+data ContractDecl a 
+  = CDataDecl DataTy 
+  | CFieldDecl (Field a)
+  | CFunDecl (FunDef a)
+  | CMutualDecl [ContractDecl a] -- used only after SCC analysis
+  | CConstrDecl (Constructor a)
     deriving (Eq, Ord,Show, Data, Typeable)

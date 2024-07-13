@@ -28,14 +28,23 @@ import Solcore.Primitives.Primitives
       '.'        {Token _ TDot}
       'class'    {Token _ TClass}
       'instance' {Token _ TInstance}
+      'if'       {Token _ TIf}
+      'for'      {Token _ TFor}
+      'switch'   {Token _ TSwitch}
+      'case'     {Token _ TCase}
+      'default'  {Token _ TDefault}
+      'leave'    {Token _ TLeave}
+      'continue' {Token _ TContinue}
+      'break'    {Token _ TBreak}
+      'assembly' {Token _ TAssembly}
       'data'     {Token _ TData}
-      'type'     {Token _ TType}
       'match'    {Token _ TMatch}
       'function' {Token _ TFunction}
       'constructor' {Token _ TConstructor}
       'return'   {Token _ TReturn}
       'lam'      {Token _ TLam}
       ';'        {Token _ TSemi}
+      ':='       {Token _ TYAssign}
       ':'        {Token _ TColon}
       ','        {Token _ TComma}
       '->'       {Token _ TArrow}
@@ -55,7 +64,7 @@ import Solcore.Primitives.Primitives
 -- compilation unit definition 
 
 CompilationUnit :: {CompUnit Name}
-CompilationUnit : ImportList ContractList          { CompUnit $1 $2 } 
+CompilationUnit : ImportList TopDeclList          { CompUnit $1 $2 } 
 
 ImportList :: { [Import] }
 ImportList : ImportList Import                     { $2 : $1 }
@@ -64,29 +73,36 @@ ImportList : ImportList Import                     { $2 : $1 }
 Import :: { Import }
 Import : 'import' QualName ';'                     { Import (QualName $2) }
 
-ContractList :: {[Contract Name]}
-ContractList : ContractList Contract               { $2 : $1 }
+TopDeclList :: {[TopDecl Name]}
+TopDeclList : TopDecl TopDeclList                  { $1 : $2 }
              | {- empty -}                         { [] }
+
+
+-- top level declarations 
+
+TopDecl :: {TopDecl Name}
+TopDecl : Contract                                 {TContr $1}
+        | Function                                 {TFunDef $1}
+        | ClassDef                                 {TClassDef $1}
+        | InstDef                                  {TInstDef $1}
+        | DataDef                                  {TDataDef $1}
 
 -- contracts 
 
 Contract :: { Contract Name }
 Contract : 'contract' Con OptParam '{' DeclList '}' { Contract $2 $3 $5 }
 
-DeclList :: { [Decl Name] }
+DeclList :: { [ContractDecl Name] }
 DeclList : Decl DeclList                           { $1 : $2 }
          | {- empty -}                             { [] }
 
 -- declarations 
 
-Decl :: { Decl Name }
-Decl : FieldDef                                    {FieldDecl $1}
-     | DataDef                                     {DataDecl $1}
-     | SymDef                                      {SymDecl $1}
-     | ClassDef                                    {ClassDecl $1}
-     | InstDef                                     {InstDecl $1}
-     | Function                                    {FunDecl $1}
-     | Constructor                                 {ConstrDecl $1}
+Decl :: { ContractDecl Name }
+Decl : FieldDef                                    {CFieldDecl $1}
+     | DataDef                                     {CDataDecl $1}
+     | Function                                    {CFunDecl $1}
+     | Constructor                                 {CConstrDecl $1}
 
 -- fields 
 
@@ -104,11 +120,6 @@ Constrs : Constr '|' Constrs                       {$1 : $3}
 
 Constr :: { Constr }
 Constr : Con OptTypeParam                          { Constr $1 $2 }
-
--- type synonyms 
-
-SymDef :: { TySym }
-SymDef : 'type' Con OptParam '=' Type               {TySym $2 $3 $5}
 
 -- class definitions 
 
@@ -214,6 +225,8 @@ Stmt : Expr '=' Expr                               {$1 := $3}
      | Expr                                        {StmtExp $1}
      | 'return' Expr                               {Return $2}
      | 'match' MatchArgList '{' Equations  '}'     {Match $2 $4}
+     | AsmBlock                                    {Asm $1}
+
 
 MatchArgList :: {[Exp Name]}
 MatchArgList : Expr                                {[$1]}
@@ -303,6 +316,75 @@ QualName : Con                                     { [$1] }
 
 Name :: { Name }
 Name : identifier                                  { Name $1 }
+
+-- Yul statments and blocks
+
+AsmBlock :: {YulBlock}
+AsmBlock : 'assembly' YulBlock                     {$2}
+
+YulBlock :: {YulBlock}
+YulBlock : '{' YulStmts '}'                        {$2}
+
+YulStmts :: {[YulStmt]}
+YulStmts : YulStmt ';' YulStmts                    {$1 : $3}
+         | {- empty -}                             {[]}
+
+YulStmt :: {YulStmt}
+YulStmt : YulAssignment                            {$1}
+        | YulBlock                                 {YBlock $1}
+        | YulVarDecl                               {$1}
+        | YulExp                                   {YExp $1}
+        | YulIf                                    {$1}
+        | YulSwitch                                {$1}
+        | YulFor                                   {$1}
+        | 'continue'                               {YContinue}
+        | 'break'                                  {YBreak}
+        | 'leave'                                  {YLeave}
+
+YulFor :: {YulStmt}
+YulFor : 'for' YulBlock YulExp YulBlock YulBlock   {YFor $2 $3 $4 $5}
+
+YulSwitch :: {YulStmt}
+YulSwitch : 'switch' YulExp YulCases YulDefault    {YSwitch $2 $3 $4}
+
+YulCases :: {YulCases}
+YulCases : YulCase YulCases                        {$1 : $2}
+         | {- empty -}                             {[]}
+
+YulCase :: {(Literal, YulBlock)}
+YulCase : 'case' Literal YulBlock                  {($2, $3)}
+
+YulDefault :: {Maybe YulBlock}
+YulDefault : 'default' YulBlock                    {Just $2}
+           | {- empty -}                           {Nothing}
+
+YulIf :: {YulStmt}
+YulIf : 'if' YulExp YulBlock                       {YIf $2 $3}
+
+YulVarDecl :: {YulStmt}    
+YulVarDecl : 'let' IdentifierList ':=' YulExp      {YLet $2 $4}
+
+YulAssignment :: {YulStmt}
+YulAssignment : IdentifierList ':=' YulExp         {YAssign $1 $3}
+
+IdentifierList :: {[Name]}
+IdentifierList : {- empty -}                       {[]}
+               | Name ',' IdentifierList           {$1 : $3}
+
+YulExp :: {YulExp}
+YulExp : Literal                                   {YLit $1}
+       | Name                                      {YIdent $1}
+       | Name YulFunArgs                           {YCall $1 $2}  
+
+YulFunArgs :: {[YulExp]} 
+YulFunArgs : '(' YulExpCommaList ')'               {$2}
+
+YulExpCommaList :: { [YulExp] }
+YulExpCommaList : YulExp                           {[$1]}
+              | {- empty -}                        {[]}
+              | YulExp ',' YulExpCommaList         {$1 : $3}
+
+
 
 {
 parseError :: Token -> Alex a

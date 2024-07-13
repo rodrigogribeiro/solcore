@@ -54,7 +54,7 @@ library
       Solcore.Frontend.Syntax.Stmt
       Solcore.Frontend.TypeInference.Id
       Solcore.Frontend.TypeInference.NameSupply
-      -- Solcore.Frontend.TypeInference.SccAnalysis
+      Solcore.Frontend.TypeInference.SccAnalysis
       -- Solcore.Frontend.TypeInference.TcContract
       -- Solcore.Frontend.TypeInference.TcEnv
       -- Solcore.Frontend.TypeInference.TcMonad
@@ -73,6 +73,8 @@ executable sol-core
   hs-source-dirs:
       app
   build-depends: sol-core
+  build-tool-depends: alex:alex, happy:happy
+
 
 test-suite sol-core-tests
   import: common-opts

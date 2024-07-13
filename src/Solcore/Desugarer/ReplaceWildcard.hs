@@ -74,14 +74,19 @@ instance ReplaceWildcard (Instance Id) where
   replace (Instance ps n ts m funs)
     = Instance ps n ts m <$> replace funs
 
-instance ReplaceWildcard (Decl Id) where 
-  replace (FunDecl fd) 
-    = FunDecl <$> replace fd 
-  replace (ConstrDecl c)
-    = ConstrDecl <$> replace c 
-  replace (InstDecl inst)
-    = InstDecl <$> replace inst 
+instance ReplaceWildcard (TopDecl Id) where 
+  replace (TFunDef fd) 
+    = TFunDef <$> replace fd 
+  replace (TInstDef inst)
+    = TInstDef <$> replace inst 
   replace d = return d 
+
+instance ReplaceWildcard (ContractDecl Id) where 
+  replace (CFunDecl fd)
+    = CFunDecl <$> replace fd 
+  replace (CConstrDecl c)
+    = CConstrDecl <$> replace c
+  replace d = pure d
 
 instance ReplaceWildcard (Contract Id) where 
   replace (Contract n ts decls)

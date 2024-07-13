@@ -133,9 +133,10 @@ tcDecl (CFunDecl d)
         [] -> throwError "Impossible! Empty function binding!"
         (x : _) -> pure (CFunDecl x)
 tcDecl (CMutualDecl ds) 
-  = do  
-      ds' <- CFunDecl <$> tcBindGroup ds 
-      pure (CMutualDecl ds')
+  = do
+      let f (CFunDecl fd) = fd
+      ds' <- tcBindGroup (map f ds) 
+      pure (CMutualDecl (map CFunDecl ds'))
 tcDecl (CConstrDecl cd) = CConstrDecl <$> tcConstructor cd 
 tcDecl (CDataDecl d) = pure (CDataDecl d)
 
@@ -206,9 +207,6 @@ scanFun (FunDef sig bd)
         = do 
             ps' <- mapM f ps 
             pure (Signature ctx n ps' t)
-scanFun d = throwError $ unlines [ "Invalid declaration in bind-group:"
-                                 , pretty d
-                                 ]
 
 -- type generalization 
 

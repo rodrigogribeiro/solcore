@@ -177,7 +177,7 @@ tcExp e@(Lam args bd)
           e' = everywhere (mkT (applyI s)) (Lam args' bd')
       pure (e', ps1, t1)
 
-applyI :: Subst -> Id -> Id 
+applyI :: Subst -> Ty -> Ty 
 applyI s = apply s
 
 tcBody :: Body Name -> TcM (Body Id, [Pred], Ty)

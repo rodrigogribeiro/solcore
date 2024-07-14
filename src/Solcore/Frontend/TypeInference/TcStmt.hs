@@ -59,6 +59,13 @@ tcStmt (Match es eqns)
       (es', pss', ts') <- unzip3 <$> mapM tcExp es
       (eqns', pss1, resTy) <- tcEquations ts' eqns
       withCurrentSubst (Match es' eqns', concat (pss1 : pss'), resTy)
+tcStmt s@(Asm yblk)
+  = withLocalCtx yulPrimOps $ do 
+      newBinds <- tcYulBlock yblk
+      let word' = monotype word 
+      mapM_ (flip extEnv word') newBinds
+      pure (Asm yblk, [], unit)
+
 
 tcEquations :: [Ty] -> Equations Name -> TcM (Equations Id, [Pred], Ty)
 tcEquations ts eqns  
@@ -240,7 +247,96 @@ instance Pretty (Param Id) where
   ppr (Typed (Id n t) _) = ppr n <+> text "::" <+> ppr t
   ppr (Untyped (Id n t)) = ppr n <+> text "::" <+> ppr t
 
+-- typing Yul code 
+
+tcYulBlock :: YulBlock -> TcM [Name]
+tcYulBlock yblk 
+  = withLocalEnv (concat <$> mapM tcYulStmt yblk)
+
+tcYulStmt :: YulStmt -> TcM [Name]
+tcYulStmt (YAssign ns e) 
+  = do 
+      -- do not define names 
+      tcYulExp e 
+      pure []
+tcYulStmt (YBlock yblk) 
+  = do 
+      _ <- tcYulBlock yblk 
+      -- names defined in should not return 
+      pure []
+tcYulStmt (YLet ns e)
+  = do 
+      tcYulExp e 
+      mapM_ (flip extEnv mword) ns 
+      pure ns 
+tcYulStmt (YExp e) 
+  = do 
+      tcYulExp e 
+      pure []
+tcYulStmt (YIf e yblk)
+  = do 
+      tcYulExp e 
+      _ <- tcYulBlock yblk 
+      pure []
+tcYulStmt (YSwitch e cs df)
+  = do 
+      tcYulExp e 
+      tcYulCases cs 
+      tcYulDefault df
+      pure []
+tcYulStmt (YFor init e bdy upd)
+  = do 
+      ns <- tcYulBlock init 
+      withLocalEnv do 
+        mapM_ (flip extEnv mword) ns 
+        tcYulExp e 
+        tcYulBlock bdy 
+        tcYulBlock upd 
+tcYulStmt _ = pure []
+
+tcYulExp :: YulExp -> TcM Ty 
+tcYulExp (YLit l) 
+  = tcLit l 
+tcYulExp (YIdent v)
+  = do 
+      sch <- askEnv v 
+      (_ :=> t) <- freshInst sch 
+      unless (t == word) (invalidYulType v)
+      pure t 
+tcYulExp (YCall n es)
+  = do 
+      sch <- askEnv n 
+      (_ :=> t) <- freshInst sch 
+      ts <- mapM tcYulExp es 
+      t' <- freshTyVar
+      unless (all (== word) ts) (invalidYulType n)
+      unify t (foldr (:->) t' ts)
+      withCurrentSubst t'
+
+tcYulCases :: YulCases -> TcM ()
+tcYulCases = mapM_ tcYulCase 
+
+tcYulCase :: YulCase -> TcM ()
+tcYulCase (_,yblk) 
+  = do 
+      tcYulBlock yblk
+      return ()
+
+tcYulDefault :: Maybe YulBlock -> TcM ()
+tcYulDefault (Just b) 
+  = do 
+      _ <- tcYulBlock b 
+      pure ()
+tcYulDefault Nothing = pure ()
+
+mword :: Scheme
+mword = monotype word 
+
 -- errors 
+
+invalidYulType :: Name -> TcM a 
+invalidYulType (Name n)
+  = throwError $ unlines ["Yul values can only be of word type:", n]
 
 expectedFunction :: Ty -> TcM a
 expectedFunction t 

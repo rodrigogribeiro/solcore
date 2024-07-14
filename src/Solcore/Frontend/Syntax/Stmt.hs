@@ -35,7 +35,8 @@ data YulStmt
   | YLeave 
   deriving (Eq, Ord, Show, Data, Typeable)
 
-type YulCases = [(Literal, YulBlock)] 
+type YulCases = [YulCase] 
+type YulCase = (Literal, YulBlock)
 type YulDefault = Maybe (YulBlock)
 
 data YulExp 

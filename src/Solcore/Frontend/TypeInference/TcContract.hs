@@ -38,13 +38,20 @@ tcTopDecl :: TopDecl Name -> TcM (TopDecl Id)
 tcTopDecl (TContr c) 
   = TContr <$> tcContract c
 tcTopDecl (TFunDef fd)
-  = undefined 
+  = do 
+      fd' <- tcBindGroup [fd] 
+      case fd' of 
+        (fd1 : _) -> pure (TFunDef fd1)
+        _ -> throwError "Impossible! Empty binding group!"
 tcTopDecl (TClassDef c)
-  = undefined 
+  = TClassDef <$> tcClass c 
 tcTopDecl (TInstDef is)
-  = undefined 
+  = TInstDef <$> tcInstance is
 tcTopDecl (TMutualDef ts)
-  = undefined 
+  = do 
+      let f (TFunDef fd) = fd 
+      ts' <- tcBindGroup (map f ts)
+      pure (TMutualDef $ map TFunDef ts')
 tcTopDecl (TDataDef d)
   = pure (TDataDef d)
 
@@ -162,6 +169,31 @@ tcInstance (Instance ctx n ts t funs)
   = do 
       (funs', _, _) <- unzip3 <$> mapM tcFunDef funs
       pure (Instance ctx n ts t funs')
+
+tcClass :: Class Name -> TcM (Class Id)
+tcClass (Class ctx n vs v sigs) 
+  = do
+      let ns = map sigName sigs 
+      schs <- mapM askEnv ns 
+      sigs' <- mapM tcSig (zip sigs schs)
+      pure (Class ctx n vs v sigs')
+
+tcSig :: (Signature Name, Scheme) -> TcM (Signature Id)
+tcSig (sig, (Forall _ (_ :=> t))) 
+  = do
+      let (ts,r) = unwindType t 
+          param (Typed n t) t1 = Typed (Id n t1) t1 
+          param (Untyped n) t1 = Typed (Id n t1) t1
+          params' = zipWith param (sigParams sig) ts
+      pure (Signature (sigName sig)
+                      (sigContext sig)
+                      params'
+                      (Just r))
+
+unwindType :: Ty -> ([Ty], Ty)
+unwindType (a :-> b) 
+  = let (as, r) = unwindType b in (a:as, r)
+unwindType t = ([], t)
 
 -- type checking binding groups
 

@@ -12,13 +12,38 @@ type Equations a = [Equation a]
 
 data Stmt a
   = (Exp a) := (Exp a)                  -- assignment
-  | Let a (Maybe Ty) (Maybe (Exp a)) -- local variable  
+  | Let a (Maybe Ty) (Maybe (Exp a))    -- local variable  
   | StmtExp (Exp a)                     -- expression level statements
   | Return (Exp a)                      -- return statements
-  | Match [Exp a] (Equations a)         -- pattern matching 
+  | Match [Exp a] (Equations a)         -- pattern matching
+  | Asm YulBlock                        -- Yul block 
   deriving (Eq, Ord, Show, Data, Typeable)
 
 type Body a = [Stmt a]
+type YulBlock = [YulStmt]
+
+data YulStmt 
+  = YAssign [Name] YulExp
+  | YBlock YulBlock
+  | YLet [Name] YulExp 
+  | YExp YulExp 
+  | YIf YulExp YulBlock 
+  | YSwitch YulExp YulCases YulDefault
+  | YFor YulBlock YulExp YulBlock YulBlock 
+  | YContinue 
+  | YBreak 
+  | YLeave 
+  deriving (Eq, Ord, Show, Data, Typeable)
+
+type YulCases = [YulCase] 
+type YulCase = (Literal, YulBlock)
+type YulDefault = Maybe (YulBlock)
+
+data YulExp 
+  = YLit Literal 
+  | YIdent Name 
+  | YCall Name [YulExp]
+  deriving (Eq, Ord, Show, Data, Typeable)
 
 data Param a 
   = Typed a Ty 

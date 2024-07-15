@@ -2,7 +2,7 @@ module Solcore.Frontend.TypeInference.Id where
 
 import Data.Generics (Data, Typeable)
 
-import Text.PrettyPrint.HughesPJ (text, (<+>))
+import Text.PrettyPrint.HughesPJ (text, (<+>), empty)
 
 import Solcore.Frontend.Pretty.SolcorePretty
 import Solcore.Frontend.Syntax
@@ -21,4 +21,6 @@ instance HasType Id where
   fv (Id _ t) = fv t
 
 instance Pretty Id  where 
-  ppr (Id n t) = ppr n
+  ppr (Id n t) = ppr n <+> if debug then text "::" <+> ppr t else empty 
+
+debug = False 

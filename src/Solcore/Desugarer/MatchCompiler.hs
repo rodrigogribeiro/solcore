@@ -36,20 +36,36 @@ https://link.springer.com/content/pdf/10.1007/3-540-15975-4_48.pdf
 
 
 matchCompiler :: CompUnit Id -> IO (Either String (CompUnit Id))
-matchCompiler (CompUnit imps cons) 
+matchCompiler (CompUnit imps ds) 
   = do
-      res <- mapM matchCompilerContract cons 
+      res <- mapM matchCompilerDecl (zip [0..] ds)
       case partitionEithers res of 
-        ([], cons') -> return $ Right $ CompUnit imps cons'
+        ([], cons') -> return $ Right $ CompUnit imps (concat cons')
         (errs, _)   -> return $ Left $ unlines errs
 
-matchCompilerContract :: Contract Id -> IO (Either String (Contract Id))
-matchCompilerContract (Contract n ts ds)
+{-
+ - Need to fix it here. 
+ -
+ - I need to do recurse this over contracts, 
+ - however, I need to write functions only 
+ - in the current scope
+ -}
+
+matchCompilerDecl :: (Int, TopDecl Id) -> IO (Either String [TopDecl Id])
+matchCompilerDecl (_, TContr (Contract n vs ds))
   = do 
       res <- runCompilerM [n] (mapM compile ds)
       case res of 
         (Left err, _) -> return $ Left err 
-        (Right ds', fs) -> return $ Right $ Contract n ts (ds' ++ map FunDecl fs)
+        (Right ds', fs) -> return $ Right [TContr (Contract n vs (ds' ++ map CFunDecl fs))]
+matchCompilerDecl (i, d)
+  = do 
+      let n = Name ("foo" ++ show i)
+      res <- runCompilerM [n] (compile d)
+      case res of 
+        (Left err, _) -> return $ Left err 
+        (Right ds', fs) -> 
+          return $ Right (ds' : map TFunDef fs)
 
 class Compile a where 
   type Res a 
@@ -64,14 +80,24 @@ instance Compile a => Compile (Maybe a) where
   compile Nothing = return Nothing 
   compile (Just e) = Just <$> compile e
 
-instance Compile (Decl Id) where 
-  type Res (Decl Id) = Decl Id
-  compile (InstDecl inst)
-    = InstDecl <$> compile inst 
-  compile (FunDecl fun)
-    = FunDecl <$> compile fun 
-  compile (ConstrDecl con)
-    = ConstrDecl <$> compile con 
+instance Compile (TopDecl Id) where 
+  type Res (TopDecl Id) = TopDecl Id
+  compile (TInstDef inst)
+    = TInstDef <$> compile inst 
+  compile (TFunDef fun)
+    = TFunDef <$> compile fun
+  compile (TMutualDef ts)
+    = TMutualDef <$> compile ts 
+  compile d = return d 
+
+instance Compile (ContractDecl Id) where 
+  type Res (ContractDecl Id) = ContractDecl Id
+  compile (CFunDecl fun)
+    = CFunDecl <$> compile fun 
+  compile (CConstrDecl con)
+    = CConstrDecl <$> compile con 
+  compile (CMutualDecl cs)
+    = CMutualDecl <$> compile cs 
   compile d = return d 
 
 instance Compile (Instance Id) where 

@@ -40,19 +40,26 @@ tokens :-
         <0>    "import"                          {simpleToken TImport}
         <0>    "let"                             {simpleToken TLet}
         <0>    "data"                            {simpleToken TData}
-        <0>    "type"                            {simpleToken TType}
         <0>    "."                               {simpleToken TDot}
         <0>    ":"                               {simpleToken TColon}
         <0>    "="                               {simpleToken TEq}
+        <0>    ":="                              {simpleToken TYAssign}
         <0>    "class"                           {simpleToken TClass}
         <0>    "instance"                        {simpleToken TInstance}
         <0>    "if"                              {simpleToken TIf}
+        <0>    "for"                             {simpleToken TFor}
+        <0>    "switch"                          {simpleToken TSwitch}
+        <0>    "case"                            {simpleToken TCase}
+        <0>    "default"                         {simpleToken TDefault}
         <0>    "match"                           {simpleToken TMatch}
-        <0>    "while"                           {simpleToken TWhile}
         <0>    "function"                        {simpleToken TFunction}
         <0>    "constructor"                     {simpleToken TConstructor}
         <0>    "return"                          {simpleToken TReturn}
+        <0>    "leave"                           {simpleToken TLeave}
+        <0>    "continue"                        {simpleToken TContinue}
+        <0>    "break"                           {simpleToken TBreak}
         <0>    "lam"                             {simpleToken TLam}
+        <0>    "assembly"                        {simpleToken TAssembly}
         <0>    "->"                              {simpleToken TArrow}
         <0>    "=>"                              {simpleToken TDArrow}
         <0>    ";"                               {simpleToken TSemi}
@@ -140,14 +147,21 @@ data Lexeme
   | TClass 
   | TInstance 
   | TData 
-  | TType
   | TMatch
   | TIf 
-  | TWhile
+  | TFor 
+  | TSwitch 
+  | TCase 
+  | TDefault
+  | TContinue 
+  | TLeave 
+  | TBreak 
   | TFunction
   | TConstructor
   | TReturn 
   | TLam
+  | TYAssign
+  | TAssembly
   | TSemi
   | TWildCard
   | TArrow
@@ -169,13 +183,19 @@ mkIdent (st, _, _, str) len
   = case take len str of 
       "match" -> return $ Token (position st) TMatch
       "data" -> return $ Token (position st) TData 
-      "type" -> return $ Token (position st) TType
       "import" -> return $ Token (position st) TImport 
       "contract" -> return $ Token (position st) TContract
       "function" -> return $ Token (position st) TFunction
       "constructor" -> return $ Token (position st) TConstructor
-      "return" -> return $ Token (position st) TReturn 
+      "return" -> return $ Token (position st) TReturn
+      "continue" -> return $ Token (position st) TContinue 
+      "break" -> return $ Token (position st) TBreak 
       "let" -> return $ Token (position st) TLet
+      "assembly" -> return $ Token (position st) TAssembly
+      "if" -> return $ Token (position st) TIf 
+      "switch" -> return $ Token (position st) TSwitch 
+      "for" -> return $ Token (position st) TFor 
+      "default" -> return $ Token (position st) TDefault
       _ -> return $ Token (position st) (TIdent $ take len str)
 
 mkCon :: AlexAction Token 

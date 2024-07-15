@@ -24,46 +24,119 @@ sccAnalysis :: CompUnit Name -> IO (Either String (CompUnit Name))
 sccAnalysis m = runExceptT (mkScc m)
 
 mkScc :: CompUnit Name -> SCC (CompUnit Name)
-mkScc (CompUnit imps cs) = CompUnit imps <$> mapM sccContract cs
+mkScc (CompUnit imps cs) = CompUnit imps <$> depDecls cs
 
-sccContract :: Contract Name -> SCC (Contract Name)
-sccContract (Contract n ts ds) 
-  = do 
-      (cgraph, posMap, declMap) <- mkCallGraph defs
+depDecls :: [TopDecl Name] -> SCC [TopDecl Name]
+depDecls ds 
+  = do 
+      (ds1,ds2) <- depAnalysis ds' 
+      cs' <- mapM depContract cs 
+      pure (cs' ++ ds1 ++ ds2)
+    where 
+      (cs, ds') = partition isContract ds 
+      isContract (TContr _) = True 
+      isContract _ = False 
+
+depContract :: TopDecl Name -> SCC (TopDecl Name)
+depContract (TContr (Contract n vs ds))
+  = do 
+      (os, ds') <- depAnalysis ds 
+      pure (TContr $ Contract n vs (os ++ ds'))
+depContract d = pure d
+
+-- generic dependency analysis algorithm
+
+depAnalysis :: HasDeps a => [a] -> SCC ([a], [a])
+depAnalysis ds 
+  = do
+      (cgraph, posMap, declMap) <- mkCallGraph decls
       newDecls <- rebuildDecls posMap declMap (scc cgraph)
       (cgraph', posMap', declMap') <- mkCallGraph newDecls
       newDecls' <- sortDecls posMap' declMap' (topsort cgraph')
-      pure (Contract n ts (others ++ newDecls'))
-    where 
-      isDecl (FunDecl _) = True 
-      isDecl _ = False 
-      (defs, others) = partition isDecl ds
+      return (others, newDecls')
+    where 
+      (decls, others) = partition isDecl ds 
 
-sortDecls :: Map Int Name -> 
-             Map Name (Decl Name) -> 
-             [Node] -> 
-             SCC [Decl Name]
-sortDecls posMap declMap nodes 
-  = mapM (rebuild posMap declMap) nodes
+-- creating the call graph for the dependency analysis
 
-rebuildDecls :: Map Int Name -> 
-                Map Name (Decl Name) -> 
-                [[Node]] -> 
-                SCC [Decl Name]
+mkCallGraph :: HasDeps a => [a] -> SCC ( Gr Name ()
+                                       , Map Int Name 
+                                       , Map Name a
+                                       )
+mkCallGraph ds 
+  = do 
+      let 
+        nodes' = zip [0..] (concatMap nameOf ds)
+        swap (x,y) = (y,x)
+        valMap = Map.fromList (map swap nodes')
+        declMap = mkDeclMap ds 
+      table <- mkCallTable ds 
+      edges' <- mkEdges table valMap 
+      pure (mkGraph nodes' edges', Map.fromList nodes', declMap)
+
+mkDeclMap :: HasDeps a => [a] -> Map Name a 
+mkDeclMap 
+  = foldr step Map.empty 
+    where 
+      step d ac = Map.union ac (Map.fromList (zip (nameOf d) 
+                                                  (repeat d)))
+
+mkEdges :: Map Name [Name] -> Map Name Int -> SCC [LEdge ()]
+mkEdges tables pos 
+  = foldM step [] (Map.toList tables)
+  where 
+    step ac (k, vs) = do 
+      v' <- findPos k 
+      vs' <- mapM findPos vs 
+      let ac' = map (\ x -> (x, v', ())) vs' 
+      pure (ac' ++ ac)
+    findPos k 
+      = case Map.lookup k pos of 
+          Just n -> pure n 
+          _ -> pure minBound 
+    err v = throwError ("Undefined name:\n" ++ unName v)
+
+mkCallTable :: HasDeps a => [a] -> SCC (Map Name [Name])
+mkCallTable ds 
+  = do 
+      let emptyTable = mkEmptyTable ds 
+          funs = Map.keys emptyTable
+          go d ac = Map.unionWith (++) 
+                      ac 
+                      (Map.fromList [(n, fv d) | n <- nameOf d])
+          m = foldr go emptyTable ds 
+      pure m 
+
+mkEmptyTable :: HasDeps a => [a] -> Map Name [Name]
+mkEmptyTable = foldr step Map.empty 
+  where 
+    step d ac = Map.union ac (Map.fromList (zip (nameOf d) (repeat [])))
+
+-- rebuilding the declaration list 
+
+rebuildDecls :: HasDeps a => Map Int Name -> 
+                             Map Name a -> 
+                             [[Node]] -> 
+                             SCC [a]
 rebuildDecls posMap declMap 
-  = mapM (rebuildDecl posMap declMap)
+  = mapM (rebuildDecl posMap declMap)
 
-rebuildDecl :: Map Int Name -> 
-               Map Name (Decl Name) -> 
-               [Node] -> SCC (Decl Name)
+
+rebuildDecl :: HasDeps a => Map Int Name -> 
+                            Map Name a -> 
+                            [Node] -> 
+                            SCC a 
 rebuildDecl _ _ [] 
   = throwError "Impossible! Empty node list!"
 rebuildDecl pmap dmap [n] 
   = rebuild pmap dmap n 
 rebuildDecl pmap dmap ns 
-  = MutualDecl <$> mapM (rebuild pmap dmap) ns
+  = mkMutual <$> mapM (rebuild pmap dmap) ns
 
-rebuild :: Map Int Name -> Map Name (Decl Name) -> Node -> SCC (Decl Name)
+rebuild :: HasDeps a => Map Int Name -> 
+                        Map Name a -> 
+                        Node -> 
+                        SCC a
 rebuild pmap dmap n 
   = case Map.lookup n pmap of
       Just k -> 
@@ -72,63 +145,32 @@ rebuild pmap dmap n
           Nothing -> throwError ("Impossible! Undefined decl:" ++ (unName k)) 
       Nothing -> throwError ("Impossible! Undefined decl:" ++ show n)
 
-mkCallGraph :: [Decl Name] -> SCC ( Gr Name ()
-                                  , Map Int Name
-                                  , Map Name (Decl Name))
-mkCallGraph ds 
-  = do
-      let
-        nodes' = zip [0..] (concatMap nameOf ds) 
-        swap (x,y) = (y,x)
-        valMap = Map.fromList (map swap nodes')
-        declMap = mkDeclMap ds
-      table <- mkCallTable ds
-      edges' <- mkEdges table valMap
-      pure (mkGraph nodes' edges', Map.fromList nodes', declMap)
+sortDecls :: HasDeps a => Map Int Name -> 
+                          Map Name a -> 
+                          [Node] -> 
+                          SCC [a]
+sortDecls posMap declMap nodes 
+  = mapM (rebuild posMap declMap) nodes
 
-mkDeclMap :: [Decl Name] -> Map Name (Decl Name)
-mkDeclMap 
-  = foldr step Map.empty  
-    where 
-      step d ac = Map.union ac (Map.fromList (zip (nameOf d) (repeat d)))  
+-- type class for SCC analysis
 
-mkEdges :: Map Name [Name] -> Map Name Int -> SCC [LEdge ()] 
-mkEdges table pos 
-  = foldM step [] (Map.toList table)
-    where 
-      step ac (k,vs) = do 
-        v' <- findPos k 
-        vs' <- mapM findPos vs
-        let ac' = map (\ x -> (x, v', ())) vs' 
-        pure (ac' ++ ac)
-      findPos k = case Map.lookup k pos of
-                    Just n -> pure n 
-                    _      -> pure minBound 
-      err v = throwError ("Undefined name:\n" ++ (unName v))
+class FreeVars a => HasDeps a where 
+  nameOf :: a -> [Name]
+  mkMutual :: [a] -> a
+  isDecl :: a -> Bool 
 
-mkCallTable :: [Decl Name] -> SCC (Map Name [Name])
-mkCallTable ds 
-  = do
-      let emptyTable = mkEmptyTable ds
-          funs = Map.keys emptyTable 
-          names :: Decl Name -> [Name]
-          names fd = fv fd
-          go d ac = Map.unionWith (++) ac (Map.fromList [(n, names d) | n <- nameOf d]) 
-          m = foldr go emptyTable ds
-      pure m
+instance HasDeps (TopDecl Name) where 
+  nameOf (TFunDef fd) = [sigName $ funSignature fd]
+  nameOf (TMutualDef ds) = concatMap nameOf ds 
+  mkMutual = TMutualDef 
+  isDecl (TFunDef _) = True 
+  isDecl _ = False 
 
-mkEmptyTable :: [Decl Name] -> Map Name [Name]
-mkEmptyTable = foldr step Map.empty 
-  where 
-    step d ac = Map.union ac (Map.fromList (zip (nameOf d) (repeat [])))
-
-nameOf :: Decl Name -> [Name]
-nameOf (FunDecl fd) = [funDefName fd]
-nameOf (MutualDecl ds) = concatMap nameOf ds
-
-funDefName :: FunDef Name -> Name 
-funDefName (FunDef sig _) 
-  = sigName sig
+instance HasDeps (ContractDecl Name) where 
+  nameOf (CFunDecl fd) = [sigName $ funSignature fd]
+  mkMutual = CMutualDecl 
+  isDecl (CFunDecl _) = True 
+  isDecl _ = False 
 
 class FreeVars a where 
   fv :: a -> [Name]
@@ -145,19 +187,29 @@ instance FreeVars (Exp Name) where
 
 instance FreeVars (Stmt Name) where 
   fv (_ := e) = fv e 
-  fv (Let _ _ (Just e)) = fv e 
+  fv (Let n _ (Just e)) = fv e \\ [n]
   fv (StmtExp e) = fv e 
   fv (Return e) = fv e 
   fv (Match es eqns) = fv es `union` fv eqns 
 
-instance FreeVars (Decl Name) where 
-  fv (FunDecl (FunDef sig ss)) = fv ss \\ ps 
+instance FreeVars (FunDef Name) where 
+  fv (FunDef sig ss) = fv ss \\ ps 
     where 
       ps = map f (sigParams sig)
       f (Typed n _) = n 
-      f (Untyped n) = n
-  fv (MutualDecl ds) = fv ds
+      f (Untyped n) = n 
+
+instance FreeVars (ContractDecl Name) where 
+  fv (CFunDecl fd) = fv fd 
+  fv (CMutualDecl ds) = fv ds 
+  fv _ = []
+
+instance FreeVars (TopDecl Name) where 
+  fv (TFunDef fd) = fv fd 
+  fv (TMutualDef ds) = fv ds
   fv _ = []
 
 instance FreeVars (Equation Name) where 
   fv = fv . snd 
+
+

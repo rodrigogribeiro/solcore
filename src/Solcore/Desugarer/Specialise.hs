@@ -33,6 +33,7 @@ data SpecState = SpecState
   , spTypeTable :: Table TypeInfo
   , spGlobalEnv :: TcEnv
   , splocalEnv :: Table Ty
+  , spSubst :: Subst
   }
 
 type SM a = StateT SpecState IO a
@@ -50,11 +51,15 @@ panics msgs = do
     writes ("PANIC: ":msgs)
     liftIO exitFailure
 
+-- | `withLocalState` runs a computation with a local state
+-- local changes are discarded, with te exception of the `specTable`
 withLocalState :: SM a -> SM a
 withLocalState m = do
     s <- get
     a <- m
+    spTable <- gets specTable
     put s
+    modify $ \s -> s { specTable = spTable }
     return a
 
 initSpecState :: TcEnv -> SpecState
@@ -64,6 +69,7 @@ initSpecState env = SpecState
     , spTypeTable = typeTable env
     , spGlobalEnv = env
     , splocalEnv = emptyTable
+    , spSubst = emptySubst
     }
 
 addSpecialisation :: Name -> TcFunDef -> SM ()
@@ -91,6 +97,12 @@ lookupResolution name ty = gets (Map.lookup name . spResTable) >>= findMatch ty 
         return (Just (e, t, subst))
     | otherwise = firstMatch etyp rest
 
+getSpSubst :: SM Subst
+getSpSubst = gets spSubst
+
+extSpSubst :: Subst -> SM ()
+extSpSubst subst = modify $ \s -> s { spSubst = subst <> spSubst s }
+
 specialiseCompUnit :: CompUnit Id -> TcEnv -> IO (CompUnit Id)
 specialiseCompUnit compUnit env = flip runSM env do
     addGlobalResolutions compUnit
@@ -114,13 +126,14 @@ specialiseContract (TContr (Contract name args decls)) = withLocalState do
 specialiseContract decl = pure decl
 
 specEntry :: Name -> SM ()
-specEntry name = do
+specEntry name = withLocalState do
     let any = TyVar (TVar (Name "any"))
     mres <- lookupResolution name any
     case mres of
       Just (fd, ty, subst) -> do
         writes ["resolution: ", show name, " : ", pretty ty, "@", pretty subst]
-        specFunDef fd subst
+        extSpSubst subst
+        specFunDef fd
         return ()
       Nothing -> do
         errors ["! specEntry: no resolution found for ", show name]
@@ -155,10 +168,11 @@ specExp e ty = do
 -- | Specialise a function call
 -- given actual arguments and the expected result type
 specCall :: Id -> [TcExp] -> Ty -> SM (Id, [TcExp])
-specCall i _ (TyVar _) = panics ["specCall ", pretty i, ": polymorphic result type"]
-specCall i _ (_ :-> _) = panics ["specCall ", pretty i, ": function result type"]
 specCall i args ty = do
   -- writes ["> specCall: ", show i, show args, " : ", pretty ty]
+  subst <- getSpSubst
+  let ty' = apply subst ty
+  guardSimpleType ty'
   let name = idName i
   let argTypes = map typeOfTcExp args
   let typedArgs = zip args argTypes
@@ -167,14 +181,20 @@ specCall i args ty = do
   -- writes ["! specCall: ", show name, " : ", pretty funType]
   mres <- lookupResolution name funType
   case mres of
-    Just (fd, ty, subst) -> do
-      -- writes ["resolution: ", show name, " : ", pretty ty, "@", pretty subst]
-      name' <- specFunDef fd subst
+    Just (fd, ty, phi) -> do
+      writes ["resolution: ", show name, " : ", pretty ty, "@", pretty phi]
+      extSpSubst phi
+      name' <- specFunDef fd
       -- writes ["< specCall: ", pretty name']
       return (Id name' ty, args')
     Nothing -> do
       writes ["! specCall: no resolution found for ", show name, " : ", pretty funType]
       return (i, args')
+  where
+    guardSimpleType :: Ty -> SM ()
+    guardSimpleType (TyVar _) = panics ["specCall ", pretty i, ": polymorphic result type"]
+    guardSimpleType (_ :-> _) = panics ["specCall ", pretty i, ": function result type"]
+    guardSimpleType _ = pure ()
 
 -- | `specFunDef` specialises a function definition
 -- to the given type of the form `arg1Ty -> arg2Ty -> ... -> resultTy`
@@ -182,8 +202,9 @@ specCall i args ty = do
 -- if not, look for a resolution (definition matching the expected type)
 -- create a new specialisation of it and record it in `specTable`
 -- returns name of the specialised function
-specFunDef :: TcFunDef -> Subst -> SM Name
-specFunDef fd subst = do
+specFunDef :: TcFunDef -> SM Name
+specFunDef fd = withLocalState do
+  subst <- getSpSubst
   let sig = funSignature fd
   let name = sigName sig
   let funType = typeOfTcFunDef fd
@@ -196,29 +217,40 @@ specFunDef fd subst = do
     Just fd' -> return name'
     Nothing -> do
       let sig' = apply subst (funSignature fd)
-      body' <- specBody subst (funDefBody fd)
+      body' <- specBody (funDefBody fd)
       let fd' = FunDef sig'{sigName = name'} body'
       writes ["! specFunDef: adding specialisation ", show name', " : ", pretty ty']
       addSpecialisation name' fd'
       return name'
 
-specBody :: Subst -> [Stmt Id] -> SM [Stmt Id]
-specBody subst body = mapM (specStmt subst) body
+specBody :: [Stmt Id] -> SM [Stmt Id]
+specBody = mapM specStmt
 
-specStmt :: Subst -> Stmt Id -> SM(Stmt Id)
-specStmt subst stmt@(Return e) = do
+specStmt :: Stmt Id -> SM(Stmt Id)
+specStmt stmt@(Return e) = do
+  subst <- getSpSubst
   let ty = typeOfTcExp e
   let ty' = apply subst ty
   case ty' of
-    TyVar _ -> panics ["specStmt(",pretty stmt,"): polymorphic return type"]
-    _ :-> _ -> panics ["specStmt(",pretty stmt,"): function return type"]
+    TyVar _ -> panics ["specStmt(",pretty stmt,"): polymorphic return type: ",
+                        pretty ty', " subst=", pretty subst]
+    _ :-> _ -> panics ["specStmt(",pretty stmt,"): function return type", pretty ty']
     _ -> return ()
   writes ["> specExp (Return): ", pretty e," : ", pretty ty, " ~> ", pretty ty']
   e' <- specExp e ty'
   writes ["< specExp (Return): ", pretty e']
   return $ Return e'
-specStmt subst stmt = errors ["specStmt not implemented for: ", show stmt]
+
+specStmt stmt = errors ["specStmt not implemented for: ", show stmt]
 -- specStmt subst stmt = pure stmt -- FIXME
+
+specMatch :: [Exp Id] -> [([Pat], [Stmt Id])] -> SM (Stmt Id)
+specMatch exps alts = do
+  alts' <- forM alts specAlt
+  return $ Match exps alts'
+  where specAlt (pat, body) = do
+          body' <- specBody body
+          return (pat, body')
 
 specName :: Name -> [Ty] -> Name
 specName n [] = n

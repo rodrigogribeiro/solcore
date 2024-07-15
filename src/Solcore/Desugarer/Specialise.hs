@@ -102,15 +102,16 @@ addGlobalResolutions _ = return ()   -- TODO when global declarations are added
 
 -------------------------------------------------------------------------------
 
-specialiseContract :: Contract Id -> SM (Contract Id)
-specialiseContract (Contract name args decls) = withLocalState do
+specialiseContract :: TopDecl Id -> SM (TopDecl Id)
+specialiseContract (TContr (Contract name args decls)) = withLocalState do
     addContractResolutions (Contract name args decls)
     forM_ entries specEntry
     st <- gets specTable
-    let decls' = map (FunDecl . snd) (Map.toList st)
-    return $ Contract name args decls'
+    let decls' = map (CFunDecl . snd) (Map.toList st)
+    return $ (TContr (Contract name args decls'))
     where
       entries = ["main"]    -- Eventually all public methods
+specialiseContract decl = pure decl
 
 specEntry :: Name -> SM ()
 specEntry name = do
@@ -128,14 +129,14 @@ addContractResolutions :: Contract Id -> SM ()
 addContractResolutions (Contract name args decls) = do
   forM_ decls addDeclResolution
 
-addDeclResolution :: Decl Id -> SM ()
-addDeclResolution (FunDecl fd) = do
+addDeclResolution :: ContractDecl Id -> SM ()
+addDeclResolution (CFunDecl fd) = do
   let sig = funSignature fd
   let name = sigName sig
   let funType = typeOfTcFunDef fd
   addResolution name funType fd
   writes ["! addDeclResolution: ", show name, " : ", pretty funType]
-addDeclResolution (InstDecl inst) = writeln "WARN: Instance declaration not supported yet"
+-- addDeclResolution (InstDecl inst) = writeln "WARN: Instance declaration not supported yet"
 addDeclResolution _ = return ()
 
 -- | `specExp` specialises an expression to given type

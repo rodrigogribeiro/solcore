@@ -171,12 +171,13 @@ specExp e ty = do
 -- | Specialise a function call
 -- given actual arguments and the expected result type
 specCall :: Id -> [TcExp] -> Ty -> SM (Id, [TcExp])
+specCall i@(Id (Name "revert") e) args ty = pure (i, args)  -- FIXME
 specCall i args ty = do
   -- writes ["> specCall: ", show i, show args, " : ", pretty ty]
-  subst <- getSpSubst
-  let ty' = apply subst ty
+  i' <- atCurrentSubst i
+  ty' <- atCurrentSubst ty
   guardSimpleType ty'
-  let name = idName i
+  let name = idName i'
   let argTypes = map typeOfTcExp args
   let typedArgs = zip args argTypes
   args' <- forM typedArgs (uncurry specExp)
@@ -189,7 +190,7 @@ specCall i args ty = do
       extSpSubst phi
       name' <- specFunDef fd
       -- writes ["< specCall: ", pretty name']
-      return (Id name' ty, args')
+      return (Id name' ty', args')
     Nothing -> do
       writes ["! specCall: no resolution found for ", show name, " : ", pretty funType]
       return (i, args')
@@ -244,6 +245,17 @@ specStmt stmt@(Return e) = do
   writes ["< specExp (Return): ", pretty e']
   return $ Return e'
 specStmt (Match exps alts) = specMatch exps alts
+specStmt (Let i mty mexp) = do
+  i' <- atCurrentSubst i
+  let ty' = idType i'
+  mty' <- atCurrentSubst mty
+  case mexp of
+    Nothing -> return $ Let i' mty' Nothing
+    Just e -> Let i' mty' <$>  Just <$> specExp e ty'
+specStmt (StmtExp e) = do
+  ty <- atCurrentSubst (typeOfTcExp e)
+  e' <- specExp e ty
+  return $ StmtExp e'
 specStmt stmt = errors ["specStmt not implemented for: ", show stmt]
 -- specStmt subst stmt = pure stmt -- FIXME
 
@@ -261,7 +273,11 @@ specName n ts = Name $ show n ++ "$" ++ intercalate "_" (map pretty ts)
 
 typeOfTcExp :: TcExp -> Ty
 typeOfTcExp (Var i)               = idType i
-typeOfTcExp (Con i _)             = idType i
+typeOfTcExp (Con i [])            = idType i
+typeOfTcExp e@(Con i args)          = go (idType i) args where
+  go ty [] = ty
+  go (_ :-> u) (a:as) = go u as
+  go _ _ = error $ "typeOfTcExp: " ++ show e
 typeOfTcExp (Lit (IntLit _))      = word --TyCon "Word" []
 typeOfTcExp (Call Nothing i args) = idType i
 typeOfTcExp (Lam args body)       = funtype tas tb where

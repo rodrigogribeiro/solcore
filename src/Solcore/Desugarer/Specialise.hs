@@ -103,6 +103,9 @@ getSpSubst = gets spSubst
 extSpSubst :: Subst -> SM ()
 extSpSubst subst = modify $ \s -> s { spSubst = subst <> spSubst s }
 
+atCurrentSubst :: HasType a => a -> SM a
+atCurrentSubst a = flip apply a <$> getSpSubst
+
 specialiseCompUnit :: CompUnit Id -> TcEnv -> IO (CompUnit Id)
 specialiseCompUnit compUnit env = flip runSM env do
     addGlobalResolutions compUnit
@@ -120,7 +123,7 @@ specialiseContract (TContr (Contract name args decls)) = withLocalState do
     forM_ entries specEntry
     st <- gets specTable
     let decls' = map (CFunDecl . snd) (Map.toList st)
-    return $ (TContr (Contract name args decls'))
+    return (TContr (Contract name args decls'))
     where
       entries = ["main"]    -- Eventually all public methods
 specialiseContract decl = pure decl
@@ -234,13 +237,13 @@ specStmt stmt@(Return e) = do
   case ty' of
     TyVar _ -> panics ["specStmt(",pretty stmt,"): polymorphic return type: ",
                         pretty ty', " subst=", pretty subst]
-    _ :-> _ -> panics ["specStmt(",pretty stmt,"): function return type", pretty ty']
+    _ :-> _ -> panics ["specStmt(",pretty stmt,"): function return type: ", pretty ty']
     _ -> return ()
   writes ["> specExp (Return): ", pretty e," : ", pretty ty, " ~> ", pretty ty']
   e' <- specExp e ty'
   writes ["< specExp (Return): ", pretty e']
   return $ Return e'
-
+specStmt (Match exps alts) = specMatch exps alts
 specStmt stmt = errors ["specStmt not implemented for: ", show stmt]
 -- specStmt subst stmt = pure stmt -- FIXME
 

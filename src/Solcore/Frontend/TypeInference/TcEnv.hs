@@ -38,7 +38,6 @@ type InstTable = Table [Inst]
 data TcEnv 
   = TcEnv {
       ctx :: Env               -- Variable environment
-    , typeEnv :: TypeTable     -- Type environment
     , instEnv :: InstTable     -- Instance Environment
     , typeTable :: TypeTable   -- Type information environment 
     , classTable :: ClassTable -- Class information table
@@ -55,7 +54,6 @@ data TcEnv
 
 initTcEnv :: TcEnv 
 initTcEnv = TcEnv primCtx 
-                  primTypeEnv
                   primInstEnv
                   primTypeEnv
                   primClassEnv 

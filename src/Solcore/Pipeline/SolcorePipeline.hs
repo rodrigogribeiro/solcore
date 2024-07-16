@@ -21,7 +21,8 @@ pipeline = do
   let r1 = runAlex content parser 
   withErr r1 $ \ ast -> do 
     r2 <- sccAnalysis ast 
-    withErr r2 $ \ ast' -> do 
+    withErr r2 $ \ ast' -> do
+      -- putStrLn $ pretty ast'
       r3 <- typeInfer ast' 
       withErr r3 $ \ (c', env) -> do 
         when (enableLog env) (mapM_ putStrLn (reverse $ logs env))

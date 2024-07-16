@@ -101,7 +101,7 @@ instance Pretty a => Pretty (Class a) where
       colon <+> 
       ppr n <+> 
       lbrace $$ 
-      pprSignatures sigs $$  
+      nest 3 (pprSignatures sigs) $$  
       rbrace 
 
 pprSignatures :: Pretty a => [Signature a] -> Doc 

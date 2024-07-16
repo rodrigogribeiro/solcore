@@ -13,8 +13,8 @@ import Solcore.Frontend.Pretty.SolcorePretty
 
 varBind :: MonadError String m => Tyvar -> Ty -> m Subst 
 varBind v t
+  | t == TyVar v = return mempty
   | v `elem` fv t = infiniteTyErr v t 
-  | t == TyVar v = return mempty 
   | otherwise = do 
     return (v +-> t)
 

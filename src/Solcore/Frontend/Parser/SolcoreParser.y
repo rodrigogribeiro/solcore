@@ -43,6 +43,7 @@ import Solcore.Primitives.Primitives
       'constructor' {Token _ TConstructor}
       'return'   {Token _ TReturn}
       'lam'      {Token _ TLam}
+      'type'     {Token _ TType}
       ';'        {Token _ TSemi}
       ':='       {Token _ TYAssign}
       ':'        {Token _ TColon}
@@ -86,6 +87,7 @@ TopDecl : Contract                                 {TContr $1}
         | ClassDef                                 {TClassDef $1}
         | InstDef                                  {TInstDef $1}
         | DataDef                                  {TDataDef $1}
+        | TypeSynonym                              {TSym $1}
 
 -- contracts 
 
@@ -103,6 +105,12 @@ Decl : FieldDef                                    {CFieldDecl $1}
      | DataDef                                     {CDataDecl $1}
      | Function                                    {CFunDecl $1}
      | Constructor                                 {CConstrDecl $1}
+     | TypeSynonym                                 {CSym $1}
+
+-- type synonym 
+
+TypeSynonym :: {TySym}
+TypeSynonym : 'type' Name '=' Type                 {TySym $2 $4}
 
 -- fields 
 

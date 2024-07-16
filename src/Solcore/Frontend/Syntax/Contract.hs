@@ -20,7 +20,8 @@ data TopDecl a
   | TClassDef (Class a)
   | TInstDef (Instance a)
   | TMutualDef [TopDecl a]
-  | TDataDef DataTy 
+  | TDataDef DataTy
+  | TSym TySym 
   deriving (Eq, Ord, Show, Data, Typeable)
 
 newtype Import 
@@ -49,6 +50,14 @@ data Constr
   = Constr {
       constrName :: Name 
     , constrTy :: [Ty]
+    } deriving (Eq, Ord, Show, Data, Typeable)
+
+-- definition of type synonym 
+
+data TySym 
+  = TySym {
+      symName :: Name 
+    , symType :: Ty 
     } deriving (Eq, Ord, Show, Data, Typeable)
 
 -- definition of contract constructor 
@@ -110,4 +119,5 @@ data ContractDecl a
   | CFunDecl (FunDef a)
   | CMutualDecl [ContractDecl a] -- used only after SCC analysis
   | CConstrDecl (Constructor a)
+  | CSym TySym 
     deriving (Eq, Ord,Show, Data, Typeable)

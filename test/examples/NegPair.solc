@@ -44,8 +44,8 @@ contract NegPair {
 
   function fromB(b) {
     match b  {
-    | F => 0;
-    | T => 1;
+    | F => return 0;
+    | T => return 1;
     };
   }
 

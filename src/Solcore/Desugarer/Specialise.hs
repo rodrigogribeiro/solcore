@@ -105,6 +105,7 @@ extSpSubst subst = modify $ \s -> s { spSubst = subst <> spSubst s }
 
 atCurrentSubst :: HasType a => a -> SM a
 atCurrentSubst a = flip apply a <$> getSpSubst
+-------------------------------------------------------------------------------
 
 specialiseCompUnit :: CompUnit Id -> TcEnv -> IO (CompUnit Id)
 specialiseCompUnit compUnit env = flip runSM env do
@@ -113,9 +114,14 @@ specialiseCompUnit compUnit env = flip runSM env do
     return $ compUnit { contracts = contracts' }
 
 addGlobalResolutions :: CompUnit Id -> SM ()
-addGlobalResolutions _ = return ()   -- TODO when global declarations are added
+addGlobalResolutions compUnit = forM_ (contracts compUnit) addDeclResolutions
 
--------------------------------------------------------------------------------
+addDeclResolutions :: TopDecl Id -> SM ()
+addDeclResolutions (TInstDef inst) = addInstResolutions inst
+addDeclResolutions _ = return ()
+
+addInstResolutions :: Instance Id -> SM ()
+addInstResolutions inst = forM_ (instFunctions inst) addMethodResolution
 
 specialiseContract :: TopDecl Id -> SM (TopDecl Id)
 specialiseContract (TContr (Contract name args decls)) = withLocalState do
@@ -154,6 +160,14 @@ addDeclResolution (CFunDecl fd) = do
   writes ["! addDeclResolution: ", show name, " : ", pretty funType]
 -- addDeclResolution (InstDecl inst) = writeln "WARN: Instance declaration not supported yet"
 addDeclResolution _ = return ()
+
+addMethodResolution :: TcFunDef -> SM ()
+addMethodResolution fd = do
+  let sig = funSignature fd
+  let name = sigName sig
+  let funType = typeOfTcFunDef fd
+  addResolution name funType fd
+  writes ["! addMethodResolution: ", show name, " : ", pretty funType]
 
 -- | `specExp` specialises an expression to given type
 specExp :: TcExp -> Ty -> SM TcExp

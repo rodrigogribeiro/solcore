@@ -1,3 +1,4 @@
+{-# LANGUAGE InstanceSigs #-}
 module Solcore.Frontend.TypeInference.TcSubst where 
 
 import Data.List
@@ -48,6 +49,12 @@ instance HasType a => HasType [a] where
   apply s = map (apply s)
   fv = foldr (union . fv) []
 
+
+instance HasType a => HasType (Maybe a) where
+  apply :: HasType a => Subst -> Maybe a -> Maybe a
+  apply s = fmap (apply s)
+  fv = maybe [] fv
+
 instance HasType Ty where
   apply (Subst s) t@(TyVar v)
     = maybe t id (lookup v s)
@@ -75,3 +82,13 @@ instance HasType Scheme where
         s' = restrict s vs
   fv (Forall vs t)
     = fv t \\ vs
+
+instance HasType a => HasType (Signature a) where
+  apply s (Signature n c p r) = Signature n (apply s c) (apply s p) (apply s r)
+  fv (Signature _ c p r) = fv (c,p,r)
+
+instance HasType a => HasType (Param a) where
+  apply s (Typed i t) = Typed (apply s i) (apply s t)
+  apply s (Untyped i) = Untyped (apply s i)
+  fv (Typed i t) = fv (i,t)
+  fv (Untyped i) = fv i

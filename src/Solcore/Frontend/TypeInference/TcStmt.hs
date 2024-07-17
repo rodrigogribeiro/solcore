@@ -186,6 +186,8 @@ tcBody [s]
   = do 
       (s', ps', t') <- tcStmt s 
       pure ([s'], ps', t')
+tcBody (Return _ : _) 
+  = throwError "Illegal return statement"
 tcBody (s : ss) 
   = do 
       (s', ps', t') <- tcStmt s
@@ -198,14 +200,11 @@ tcCall :: Maybe (Exp Name) -> Name -> [Exp Name] -> TcM (Exp Id, [Pred], Ty)
 tcCall Nothing n args 
   = do 
       s <- askEnv n
-      -- info ["Typing the call:", pretty n]
       (ps :=> t) <- freshInst s
       t' <- freshTyVar
       (es', pss', ts') <- unzip3 <$> mapM tcExp args
       s' <- unify t (foldr (:->) t' ts')
-      -- info ["Unifying ", pretty t, " with ", pretty $ foldr (:->) t' ts']
       let ps' = foldr union [] (ps : pss')
-      -- info ["Result for call:", pretty n, " is ", pretty $ apply s' t']
       withCurrentSubst (Call Nothing (Id n t') es', ps', t')
 tcCall (Just e) n args 
   = do 

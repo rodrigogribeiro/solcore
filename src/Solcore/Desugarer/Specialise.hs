@@ -93,7 +93,7 @@ lookupResolution name ty = gets (Map.lookup name . spResTable) >>= findMatch ty 
   firstMatch etyp [] = return Nothing
   firstMatch etyp ((t,e):rest)
     | Right subst <- mgu t etyp = do  -- TESTME: match is to weak for MPTC, but isn't mgu too strong?
-        writes ["! lookupRes: match found: ", str t, " ~ ", str etyp, " => ", str subst]
+        writes ["! lookupRes - match found for ", str name, ": ", str t, " ~ ", str etyp, " => ", str subst]
         return (Just (e, t, subst))
     | otherwise = firstMatch etyp rest
 
@@ -118,10 +118,11 @@ addGlobalResolutions compUnit = forM_ (contracts compUnit) addDeclResolutions
 
 addDeclResolutions :: TopDecl Id -> SM ()
 addDeclResolutions (TInstDef inst) = addInstResolutions inst
+addDeclResolutions (TFunDef fd) = addFunDefResolution fd
 addDeclResolutions _ = return ()
 
 addInstResolutions :: Instance Id -> SM ()
-addInstResolutions inst = forM_ (instFunctions inst) addMethodResolution
+addInstResolutions inst = forM_ (instFunctions inst) (addMethodResolution (mainTy inst))
 
 specialiseContract :: TopDecl Id -> SM (TopDecl Id)
 specialiseContract (TContr (Contract name args decls)) = withLocalState do
@@ -149,25 +150,28 @@ specEntry name = withLocalState do
 
 addContractResolutions :: Contract Id -> SM ()
 addContractResolutions (Contract name args decls) = do
-  forM_ decls addDeclResolution
+  forM_ decls addCDeclResolution
 
-addDeclResolution :: ContractDecl Id -> SM ()
-addDeclResolution (CFunDecl fd) = do
+addCDeclResolution :: ContractDecl Id -> SM ()
+addCDeclResolution (CFunDecl fd) = addFunDefResolution fd
+addCDeclResolution _ = return ()
+
+addFunDefResolution fd = do
   let sig = funSignature fd
   let name = sigName sig
   let funType = typeOfTcFunDef fd
   addResolution name funType fd
   writes ["! addDeclResolution: ", show name, " : ", pretty funType]
--- addDeclResolution (InstDecl inst) = writeln "WARN: Instance declaration not supported yet"
-addDeclResolution _ = return ()
 
-addMethodResolution :: TcFunDef -> SM ()
-addMethodResolution fd = do
+addMethodResolution :: Ty -> TcFunDef -> SM ()
+addMethodResolution ty fd = do
   let sig = funSignature fd
   let name = sigName sig
+  let name' = specName name [ty]
   let funType = typeOfTcFunDef fd
-  addResolution name funType fd
-  writes ["! addMethodResolution: ", show name, " : ", pretty funType]
+  let fd' = FunDef sig{sigName = name'} (funDefBody fd)
+  addResolution name funType fd'
+  writes ["! addMethodResolution: ", show name', " : ", pretty funType]
 
 -- | `specExp` specialises an expression to given type
 specExp :: TcExp -> Ty -> SM TcExp
@@ -283,7 +287,12 @@ specMatch exps alts = do
 
 specName :: Name -> [Ty] -> Name
 specName n [] = n
-specName n ts = Name $ show n ++ "$" ++ intercalate "_" (map pretty ts)
+specName n ts = Name $ show n ++ "$" ++ intercalate "_" (map mangleTy ts)
+
+mangleTy :: Ty -> String
+mangleTy (TyVar (TVar (Name n))) = n
+mangleTy (TyCon (Name n) []) = n
+mangleTy (TyCon (Name n) ts) = n ++ "L" ++ intercalate "_" (map mangleTy ts) ++"J"
 
 typeOfTcExp :: TcExp -> Ty
 typeOfTcExp (Var i)               = idType i

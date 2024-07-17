@@ -6,12 +6,39 @@ data B = F | T
 data Pair[a,b] = Pair[a,b]
 
 instance B : Neg {
-  function neg(x:B) { return bnot(x); }
+  function neg (x : B) {
+    match x {
+    | F => return T;
+    | T => return F;
+    };
+  }
 }
 
+function fst(p) {
+  match(p) {
+    | Pair[a,b] => return a;
+  };
+}
+
+function snd(p) {
+  match(p) {
+    | Pair[a,b] => return a;
+  };
+}
+
+/*
 instance [a:Neg,b:Neg] => Pair[a,b]:Neg {
   function neg(p) {
     return Pair [neg (fst(p)), neg(snd (p))];
+  }
+}
+*/
+
+instance [a:Neg,b:Neg] => Pair[a,b]:Neg {
+  function neg(p) {
+    match p {
+      | Pair[a,b] => return Pair[neg(a), neg(b)];
+    };
   }
 }
 
@@ -31,5 +58,5 @@ function fromB(b) {
   };
 }
 
-function main() { return  fromB(neg(F)); }
+function main() { return  fromB(fst(neg(Pair[F,T]))); }
 }

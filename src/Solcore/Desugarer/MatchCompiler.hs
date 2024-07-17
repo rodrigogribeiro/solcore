@@ -173,9 +173,13 @@ fourthCase _ _ []
 fourthCase (e : es) d eqns 
   = do
       let (cons, vars) = span isConstr eqns
-      conEqns <- eqnsForConstrs (e : es) d cons 
-      defEqn <- eqnsForVars es d vars 
+      defEqn <- eqnsForVars es d vars
+      let ss = stmtsFrom defEqn 
+      conEqns <- eqnsForConstrs (e : es) d ss cons 
       return [Match [e] (conEqns ++ defEqn)]
+    where
+      stmtsFrom [] = []
+      stmtsFrom ((_, ss) : _) = ss 
 
 -- implementation of the fifth case 
 
@@ -219,12 +223,13 @@ newFunName
       pre <- ask 
       return (Name $ "fun_" ++ pre ++ "_" ++ show n)
 
-eqnsForConstrs :: [Exp Id] -> [Stmt Id] -> Equations Id -> CompilerM (Equations Id)
-eqnsForConstrs es d eqns
-  = do
-      t <- (TyVar . TVar) <$> freshName
-      let def = [StmtExp (Var (Id (Name "default") t))]
-      concat <$> mapM (eqForConstr es def) (groupByConstr eqns)
+eqnsForConstrs :: [Exp Id] -> 
+                  [Stmt Id] -> 
+                  [Stmt Id] -> 
+                  Equations Id -> 
+                  CompilerM (Equations Id)
+eqnsForConstrs es d ss eqns
+  = concat <$> mapM (eqForConstr es ss) (groupByConstr eqns)
 
 eqForConstr :: [Exp Id] -> [Stmt Id] -> Equations Id -> CompilerM (Equations Id)
 eqForConstr es d eqn 

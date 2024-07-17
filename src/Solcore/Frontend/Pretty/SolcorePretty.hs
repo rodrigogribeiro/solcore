@@ -84,6 +84,10 @@ instance Pretty DataTy where
     where 
       bar = text "|"
 
+instance Pretty TySym where 
+  ppr (TySym n t) 
+    = text "type" <+> ppr n <+> text "=" <+> ppr t
+
 instance Pretty Constr where
   ppr (Constr n []) = ppr n <> text " "
   ppr (Constr n ts)
@@ -101,7 +105,7 @@ instance Pretty a => Pretty (Class a) where
       colon <+> 
       ppr n <+> 
       lbrace $$ 
-      pprSignatures sigs $$  
+      nest 3 (pprSignatures sigs) $$  
       rbrace 
 
 pprSignatures :: Pretty a => [Signature a] -> Doc 

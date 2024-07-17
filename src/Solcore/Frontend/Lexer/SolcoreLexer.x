@@ -49,6 +49,7 @@ tokens :-
         <0>    "if"                              {simpleToken TIf}
         <0>    "for"                             {simpleToken TFor}
         <0>    "switch"                          {simpleToken TSwitch}
+        <0>    "type"                            {simpleToken TType}
         <0>    "case"                            {simpleToken TCase}
         <0>    "default"                         {simpleToken TDefault}
         <0>    "match"                           {simpleToken TMatch}
@@ -151,6 +152,7 @@ data Lexeme
   | TIf 
   | TFor 
   | TSwitch 
+  | TType
   | TCase 
   | TDefault
   | TContinue 
@@ -196,6 +198,7 @@ mkIdent (st, _, _, str) len
       "switch" -> return $ Token (position st) TSwitch 
       "for" -> return $ Token (position st) TFor 
       "default" -> return $ Token (position st) TDefault
+      "type" -> return $ Token (position st) TType
       _ -> return $ Token (position st) (TIdent $ take len str)
 
 mkCon :: AlexAction Token 

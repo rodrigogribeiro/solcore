@@ -3,6 +3,7 @@ module Solcore.Frontend.TypeInference.TcContract where
 import Control.Monad
 import Control.Monad.Except
 import Control.Monad.Trans
+import Control.Monad.State
 
 import Data.Generics
 import Data.List
@@ -31,14 +32,14 @@ tcCompUnit :: CompUnit Name -> TcM (CompUnit Id)
 tcCompUnit (CompUnit imps cs)
   = do 
       loadImports imps
-      mapM_ checkTopDecl cs 
+      mapM_ checkTopDecl cs
       CompUnit imps <$> mapM tcTopDecl cs 
 
 tcTopDecl :: TopDecl Name -> TcM (TopDecl Id)
 tcTopDecl (TContr c) 
   = TContr <$> tcContract c
 tcTopDecl (TFunDef fd)
-  = do 
+  = do
       fd' <- tcBindGroup [fd] 
       case fd' of 
         (fd1 : _) -> pure (TFunDef fd1)
@@ -53,7 +54,9 @@ tcTopDecl (TMutualDef ts)
       ts' <- tcBindGroup (map f ts)
       pure (TMutualDef $ map TFunDef ts')
 tcTopDecl (TDataDef d)
-  = pure (TDataDef d)
+  = do 
+    checkDataType d
+    pure (TDataDef d)
 
 checkTopDecl :: TopDecl Name -> TcM ()
 checkTopDecl (TClassDef c) 
@@ -61,7 +64,9 @@ checkTopDecl (TClassDef c)
 checkTopDecl (TInstDef is)
   = checkInstance is 
 checkTopDecl (TDataDef dt)
-  = checkDataType dt 
+  = checkDataType dt
+checkTopDecl (TFunDef (FunDef sig _)) 
+  = extSignature sig 
 checkTopDecl _ = pure ()
 
 -- TODO load import information
@@ -166,7 +171,7 @@ tcField (Field n t _)
 
 tcInstance :: Instance Name -> TcM (Instance Id)
 tcInstance (Instance ctx n ts t funs) 
-  = do 
+  = do
       (funs', _, _) <- unzip3 <$> mapM tcFunDef funs
       pure (Instance ctx n ts t funs')
 
@@ -218,7 +223,7 @@ tcFunDef d@(FunDef sig bd)
   = withLocalEnv do
       (params', ts) <- unzip <$> mapM addArg (sigParams sig)
       (bd', ps1, t') <- tcBody bd
-      sch <- askEnv (sigName sig) 
+      sch <- askEnv (sigName sig)
       (ps :=> t) <- freshInst sch
       let t1 = foldr (:->) t' ts
       s <- unify t t1 `wrapError` d
@@ -395,7 +400,7 @@ checkInstance (Instance ctx n ts t funs)
       -- checking instance methods
       mapM_ (checkMethod ipred) funs
       let ninst = anfInstance $ ctx :=> InCls n t ts 
-      -- add to the environment 
+      -- add to the environment
       addInstance n ninst 
 
 checkOverlap :: Pred -> [Inst] -> TcM ()
@@ -430,11 +435,10 @@ checkCoverage cn ts t
           ])
 
 checkMethod :: Pred -> FunDef Name -> TcM () 
-checkMethod ih@(InCls n t ts) (FunDef sig bd) 
+checkMethod ih@(InCls n t ts) (FunDef sig _) 
   = do
-      cn <- askCurrentContract
       -- getting current method signature in class 
-      st@(Forall _ (qs :=> _)) <- askEnv (sigName sig)
+      st@(Forall _ (qs :=> ty)) <- askEnv (sigName sig)
       p <- maybeToTcM (unwords [ "Constraint for"
                                , unName n
                                , "not found in type of"
@@ -442,11 +446,10 @@ checkMethod ih@(InCls n t ts) (FunDef sig bd)
                       (findPred n qs)
       -- matching substitution of instance head and class predicate
       s <- liftEither (matchPred p ih) `wrapError` ih
-      (qs' :=> ty') <- freshInst st 
-      tps <- mapM tyParam (sigParams sig)
+      tps <- apply s <$> mapM tyParam (sigParams sig)
       tr <- maybe freshTyVar pure (sigReturn sig)
       let it = funtype tps tr
-      match it (apply s ty') `wrapError` ih 
+      match it (apply s ty) `wrapError` ih 
       pure ()
 
 tyParam :: Param Name -> TcM Ty 

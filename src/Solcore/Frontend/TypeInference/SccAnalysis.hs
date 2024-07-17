@@ -31,7 +31,7 @@ depDecls ds
   = do 
       (ds1,ds2) <- depAnalysis ds' 
       cs' <- mapM depContract cs 
-      pure (cs' ++ ds1 ++ ds2)
+      pure (ds2 ++ ds1 ++ cs')
     where 
       (cs, ds') = partition isContract ds 
       isContract (TContr _) = True 

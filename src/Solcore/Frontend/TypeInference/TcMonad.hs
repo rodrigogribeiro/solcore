@@ -88,10 +88,7 @@ clearSubst = modify (\ st -> st {subst = mempty})
 
 setCurrentContract :: Name -> Arity -> TcM ()
 setCurrentContract n ar 
-  = modify (\ ctx -> ctx{ contract = Just n
-                        , typeEnv = Map.insert n emptyTypeInfo Map.empty })
-    where 
-      emptyTypeInfo = TypeInfo ar [] []
+  = modify (\ ctx -> ctx{ contract = Just n })
 
 askCurrentContract :: TcM Name 
 askCurrentContract 
@@ -171,7 +168,7 @@ askEnv n
 
 maybeAskTypeInfo :: Name -> TcM (Maybe TypeInfo)
 maybeAskTypeInfo n 
-  = gets (Map.lookup n . typeEnv)
+  = gets (Map.lookup n . typeTable)
 
 askTypeInfo :: Name -> TcM TypeInfo 
 askTypeInfo n 
@@ -182,9 +179,9 @@ askTypeInfo n
 modifyTypeInfo :: Name -> TypeInfo -> TcM ()
 modifyTypeInfo n ti 
   = do 
-        tenv <- gets typeEnv
-        let tenv' = Map.insert n ti tenv 
-        modify (\env -> env{typeEnv = tenv'})
+        tenv <- gets typeTable
+        let tenv' = Map.insert n ti tenv
+        modify (\env -> env{typeTable = tenv'})
 
 
 -- manipulating the instance environment 
@@ -204,7 +201,7 @@ addInstance n inst
 
 maybeToTcM :: String -> Maybe a -> TcM a 
 maybeToTcM s Nothing = throwError s 
-maybetoTcM _ (Just x) = pure x
+maybeToTcM _ (Just x) = pure x
 
 -- checking coverage pragma 
 

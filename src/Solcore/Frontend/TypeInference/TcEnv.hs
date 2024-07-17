@@ -14,6 +14,7 @@ import Solcore.Primitives.Primitives
 
 -- definition of type environment  
 type Arity = Int 
+
 -- type constructor arity and names of constructors 
 data TypeInfo 
   = TypeInfo {
@@ -24,10 +25,12 @@ data TypeInfo
 
 -- name of constructor and its scheme
 type ConInfo = (Name, Scheme)
+
 -- number of weak parameters and method names
 type Method = Name 
 type ClassInfo = (Arity, [Method])
 type Table a = Map Name a 
+
 -- typing environment 
 type Env = Table Scheme
 type ClassTable = Table ClassInfo

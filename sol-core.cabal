@@ -25,6 +25,9 @@ common common-opts
     , pretty
     , optparse-applicative
     , syb
+    , megaparsec >= 9.6
+    , parser-combinators >= 1.3
+
   build-tool-depends: happy:happy, alex:alex
 
   default-language: Haskell2010
@@ -36,6 +39,7 @@ common common-opts
                       TypeFamilies
                       BlockArguments
                       DeriveDataTypeable
+                      ImportQualifiedPost
 
 library
   import: common-opts
@@ -66,7 +70,13 @@ library
       Solcore.Frontend.TypeInference.TcUnify
       Solcore.Pipeline.SolcorePipeline
       Solcore.Primitives.Primitives
-
+      Language.Core
+      Language.Core.Parser
+      Language.Yul
+      Language.Yul.Parser
+      Common.LightYear
+      Common.Pretty
+      Common.RIO
   hs-source-dirs:
       src
 
@@ -78,6 +88,23 @@ executable sol-core
   build-depends: sol-core
   build-tool-depends: alex:alex, happy:happy
 
+executable yule
+    main-is:          Main.hs
+    hs-source-dirs: yule
+    default-extensions:
+      LambdaCase
+      PatternSynonyms
+      BlockArguments
+      ImportQualifiedPost
+    other-modules: Locus, TM, Translate
+    build-depends:    base ^>=4.19.1.0,
+                      pretty >=  1.1,
+                      containers >= 0.6,
+                      mtl >= 2.3,
+                      megaparsec >= 9.6,
+                      parser-combinators >= 1.3,
+                      optparse-applicative >= 0.18,
+                      sol-core
 
 test-suite sol-core-tests
   import: common-opts

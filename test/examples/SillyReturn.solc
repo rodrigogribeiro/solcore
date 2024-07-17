@@ -1,4 +1,5 @@
 data Nat = Zero | Succ[Nat]
+data Bool = True | False
 
 function even (n) -> Bool {
   match n {

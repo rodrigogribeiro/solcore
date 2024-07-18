@@ -8,15 +8,19 @@ import Data.List
 import Data.Map (Map)
 import qualified Data.Map as Map 
 
-import Solcore.Frontend.Syntax 
+import Solcore.Frontend.Pretty.SolcorePretty
+import Solcore.Frontend.Syntax
 import Solcore.Frontend.TypeInference.Id
 import Solcore.Frontend.TypeInference.NameSupply 
 import Solcore.Frontend.TypeInference.TcSubst 
 
 
-defunctionalize :: CompUnit Id -> Either String (CompUnit Id)
-defunctionalize (CompUnit imps cs) 
-  = undefined 
+defunctionalize :: CompUnit Id -> IO ()
+defunctionalize cunit  
+  = do 
+      let ldefs = collectLam cunit 
+          n = Name "Lam"
+      mapM_ (putStrLn . pretty . createDataTy n) (Map.toList ldefs)
 
 -- definition of a type to hold lambda abstractions in code 
 
@@ -98,10 +102,18 @@ instance CollectLam (CompUnit Id) where
 instance CollectLam (Contract Id) where 
   collectLam (Contract _ _ decls) = collectLam decls
 
-instance CollectLam (Decl Id) where 
-  collectLam (ConstrDecl cd) = collectLam cd 
-  collectLam (FieldDecl fd) = collectLam fd 
-  collectLam (FunDecl fd) = collectLam fd 
+instance CollectLam (ContractDecl Id) where 
+  collectLam (CFieldDecl fd) = collectLam fd 
+  collectLam (CFunDecl fd) = collectLam fd 
+  collectLam (CMutualDecl ds) = collectLam ds 
+  collectLam (CConstrDecl cs) = collectLam cs 
+  collectLam _ = Map.empty 
+
+instance CollectLam (TopDecl Id) where 
+  collectLam (TContr cd) = collectLam cd 
+  collectLam (TFunDef fd) = collectLam fd 
+  collectLam (TInstDef is) = collectLam is 
+  collectLam (TMutualDef ts) = collectLam ts 
   collectLam _ = Map.empty 
 
 instance CollectLam (Constructor Id) where 
@@ -110,6 +122,10 @@ instance CollectLam (Constructor Id) where
 instance CollectLam (Field Id) where 
   collectLam (Field _ _ (Just e)) = collectLam e 
   collectLam _ = Map.empty 
+
+instance CollectLam (Instance Id) where 
+  collectLam (Instance _ _ _ _ fs) 
+    = collectLam fs
 
 instance CollectLam (FunDef Id) where 
   collectLam (FunDef _ bd) = collectLam bd 
@@ -128,9 +144,10 @@ instance CollectLam (Equation Id) where
 instance CollectLam (Exp Id) where 
   collectLam (Con _ es) = collectLam es 
   collectLam (FieldAccess e _) = collectLam e 
-  collectLam (Call (Just e) n es) 
-    = Map.unionWith (++) (collectLam e) (collectArgs n es)
-  collectLam (Call _ n es) = collectArgs n es 
+  collectLam (Call (Just e) (Id n _) es) 
+    = Map.unionWith (++) (collectLam e) 
+                         (collectArgs n es)
+  collectLam (Call _ (Id n _) es) = collectArgs n es 
   collectLam _ = Map.empty 
 
 collectArgs :: Name -> [Exp Id] -> Map Name [LamDef]

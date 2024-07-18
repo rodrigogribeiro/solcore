@@ -82,7 +82,7 @@ instance Pretty DataTy where
       equals <+>  
       hsep (punctuate bar (map ppr cs))
     where 
-      bar = text "|"
+      bar = text " |"
 
 instance Pretty TySym where 
   ppr (TySym n t) 

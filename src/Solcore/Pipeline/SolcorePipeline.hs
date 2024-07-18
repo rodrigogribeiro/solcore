@@ -4,6 +4,7 @@ import Control.Monad
 
 import Options.Applicative
 
+import Solcore.Desugarer.Defunctionalization
 import Solcore.Desugarer.MatchCompiler
 import Solcore.Frontend.Lexer.SolcoreLexer
 import Solcore.Frontend.Parser.SolcoreParser
@@ -34,6 +35,7 @@ pipeline = do
           r5 <- specialiseCompUnit res env
           putStrLn "Specialised contract:"
           putStrLn (pretty r5)
+          defunctionalize res 
           return ()
 withErr :: Either String a -> (a -> IO ()) -> IO ()
 withErr r f = either putStrLn f r

@@ -16,14 +16,7 @@ import Solcore.Frontend.TypeInference.TcSubst
 
 defunctionalize :: CompUnit Id -> Either String (CompUnit Id)
 defunctionalize (CompUnit imps cs) 
-  = case runDefunM initEnv (mapM defunContract cs) of 
-      Left err -> Left err 
-      Right (cs', _) -> Right (CompUnit imps cs') 
-
-defunContract :: Contract Id -> DefunM (Contract Id)
-defunContract c 
   = undefined 
-
 
 -- definition of a type to hold lambda abstractions in code 
 

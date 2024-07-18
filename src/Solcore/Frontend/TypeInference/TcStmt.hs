@@ -205,7 +205,8 @@ tcCall Nothing n args
       (es', pss', ts') <- unzip3 <$> mapM tcExp args
       s' <- unify t (foldr (:->) t' ts')
       let ps' = foldr union [] (ps : pss')
-      withCurrentSubst (Call Nothing (Id n t') es', ps', t')
+          t1 = foldr (:->) t' ts'
+      withCurrentSubst (Call Nothing (Id n t1) es', ps', t')
 tcCall (Just e) n args 
   = do 
       (e', ps , ct) <- tcExp e

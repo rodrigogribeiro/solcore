@@ -35,15 +35,15 @@ function filter (f, xs) {
 function list1 () {
   return Cons[1, Cons[2, Cons[3, Nil]]]; 
 }
-
+ 
 function foo0(y) {
   return filter((lam (x){ return eq(x,y); }), list1());
 }
-
+ 
 function foo1() {
   return filter((lam (x){ return eq(x,1); }), list1());
 }
-
+ 
 function foo2(p,q) {
   return filter(lam (x) { return and(p(x), q(x)) ; }
                 , list1());

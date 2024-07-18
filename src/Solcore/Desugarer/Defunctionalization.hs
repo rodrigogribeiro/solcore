@@ -1,5 +1,6 @@
 module Solcore.Desugarer.Defunctionalization where
 
+import Control.Monad
 import Control.Monad.Except
 import Control.Monad.Identity
 import Control.Monad.State
@@ -20,7 +21,8 @@ defunctionalize cunit
   = do 
       let ldefs = collectLam cunit 
           n = Name "Lam"
-      mapM_ (putStrLn . pretty . createDataTy n) (Map.toList ldefs)
+      dt <- mapM (createDataTy n) (Map.toList ldefs)
+      mapM_ (putStrLn . pretty) dt 
 
 -- definition of a type to hold lambda abstractions in code 
 
@@ -33,23 +35,27 @@ data LamDef
 -- create data types for each lambda abstraction parameter 
 -- of a high-order function. 
 
-createDataTy :: Name -> (Name, [LamDef]) -> DataTy 
+createDataTy :: Name -> (Name, [LamDef]) -> IO DataTy 
 createDataTy (Name n) ((Name f), lams) 
-  = DataTy (Name n') tvs (zipWith (mkConstr n' tvs) idss [0..]) 
-    where
-      n' = n ++ "_" ++ f 
-      idss = map vars lams
-      ids = foldr union [] idss
-      tvs = foldr (union . fv . idType) [] ids
+  = do
+      let 
+        n' = n ++ "_" ++ f 
+        idss = map vars lams
+        ids = foldr union [] idss
+        tvs = foldr (union . fv . idType) [] ids
+      css <- zipWithM (mkConstr n' tvs) idss [0..]
+      pure $ DataTy (Name n') tvs css  
 
-mkConstr :: String -> [Tyvar] -> [Id] -> Int -> Constr 
+mkConstr :: String -> [Tyvar] -> [Id] -> Int -> IO Constr 
 mkConstr s tvs ids i  
-  = Constr (Name (s ++ show i)) 
-           (map (mkConstrParam s tvs . idType) ids)
+  = Constr n' <$> mapM (mkConstrParam s tvs . idType) ids 
+    where 
+      n' = Name (s ++ show i)
 
-mkConstrParam :: String -> [Tyvar] -> Ty -> Ty 
-mkConstrParam s vs (_ :-> _) = TyCon (Name s) (TyVar <$> vs)
-mkConstrParam _ _ t = t 
+mkConstrParam :: String -> [Tyvar] -> Ty -> IO Ty 
+mkConstrParam s vs (_ :-> _) 
+  = pure $ TyCon (Name s) (TyVar <$> vs)
+mkConstrParam _ _ t = pure t 
 
 -- determining free variables 
 
@@ -78,8 +84,8 @@ instance Vars (Exp Id) where
   vars (Var n) = [n]
   vars (Con _ es) = vars es 
   vars (FieldAccess e _) = vars e
-  vars (Call (Just e) _ es) = vars (e : es)
-  vars (Call Nothing _ es) = vars es 
+  vars (Call (Just e) n es) = vars (e : es)
+  vars (Call Nothing n es) = vars es 
   vars (Lam ps bd) = vars bd \\ vars ps
   vars _ = []
 

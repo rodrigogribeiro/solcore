@@ -19,6 +19,7 @@ import Solcore.Desugarer.Specialise
 pipeline :: IO ()
 pipeline = do
   opts <- argumentsParser
+  let verbose = optVerbose opts 
   content <- readFile (fileName opts)
   let r1 = runAlex content parser
   withErr r1 $ \ ast -> do
@@ -26,15 +27,16 @@ pipeline = do
     withErr r2 $ \ ast' -> do
       r3 <- typeInfer ast'
       withErr r3 $ \ (c', env) -> do
-        when (enableLog env) (mapM_ putStrLn (reverse $ logs env))
+        when verbose (mapM_ putStrLn (reverse $ logs env))
         r4 <- matchCompiler c'
         withErr r4 $ \ res -> do
-          when (optVerbose opts) do
+          when True do
             putStrLn "Desugared contract:"
             putStrLn (pretty res)
           r5 <- specialiseCompUnit res env
-          putStrLn "Specialised contract:"
-          putStrLn (pretty r5)
+          when verbose do 
+            putStrLn "Specialised contract:"
+            putStrLn (pretty r5)
           defunctionalize res 
           return ()
 withErr :: Either String a -> (a -> IO ()) -> IO ()

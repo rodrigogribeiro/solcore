@@ -303,8 +303,7 @@ typeOfTcExp e@(Con i args)          = go (idType i) args where
   go _ _ = error $ "typeOfTcExp: " ++ show e
 typeOfTcExp (Lit (IntLit _))      = word --TyCon "Word" []
 typeOfTcExp (Call Nothing i args) = idType i
-typeOfTcExp (Lam args body)       = funtype tas tb where
-  tb = typeOfTcBody body
+typeOfTcExp (Lam args body (Just tb))       = funtype tas tb where
   tas = map typeOfTcParam args
 typeOfTcExp e = error $ "typeOfTcExp: " ++ show e
 

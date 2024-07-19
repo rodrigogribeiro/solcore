@@ -16,12 +16,12 @@ import Solcore.Frontend.TypeInference.NameSupply
 import Solcore.Frontend.TypeInference.TcSubst 
 
 
-defunctionalize :: CompUnit Id -> IO ()
-defunctionalize cunit  
+defunctionalize :: [Name] -> CompUnit Id -> IO ()
+defunctionalize ns cunit  
   = do 
-      let ldefs = collectLam cunit 
+      let ldefs = collectLam cunit
           n = Name "Lam"
-      dt <- mapM (createDataTy n) (Map.toList ldefs)
+          dt = map (createDataTy ns n) (Map.toList ldefs)
       mapM_ (putStrLn . pretty) dt 
 
 -- definition of a type to hold lambda abstractions in code 
@@ -29,33 +29,46 @@ defunctionalize cunit
 data LamDef 
   = LamDef { 
       lamArgs :: [Param Id] -- lambda arguments 
-    , lamBody :: Body Id    -- lambda body 
+    , lamBody :: Body Id    -- lambda body
+    , lamTy :: Ty           -- Type of the lambda abstraction 
     } deriving (Eq, Ord, Show)
+
+-- create apply function 
+
 
 -- create data types for each lambda abstraction parameter 
 -- of a high-order function. 
 
-createDataTy :: Name -> (Name, [LamDef]) -> IO DataTy 
-createDataTy (Name n) ((Name f), lams) 
-  = do
-      let 
-        n' = n ++ "_" ++ f 
-        idss = map vars lams
-        ids = foldr union [] idss
-        tvs = foldr (union . fv . idType) [] ids
-      css <- zipWithM (mkConstr n' tvs) idss [0..]
-      pure $ DataTy (Name n') tvs css  
+createDataTy :: [Name] -> Name -> (Name, [LamDef]) -> DataTy 
+createDataTy ns (Name n) ((Name f), lams) 
+  = let 
+      n' = n ++ "_" ++ f
+      css = zipWith (mkConstr ns n') lams [0..]
+      tvs = fv (map lamTy lams)
+    in DataTy (Name n') tvs css  
 
-mkConstr :: String -> [Tyvar] -> [Id] -> Int -> IO Constr 
-mkConstr s tvs ids i  
-  = Constr n' <$> mapM (mkConstrParam s tvs . idType) ids 
-    where 
+mkConstr :: [Name] -> String -> LamDef -> Int -> Constr 
+mkConstr ns s ldef i  
+  = Constr n' $ map (mkConstrParam s tvs (lamTy ldef) . idType)
+                    (filter valid $ vars ldef)  
+    where
+      valid (Id n _) = n `notElem` ns
+      tvs = fv (lamTy ldef)
       n' = Name (s ++ show i)
 
-mkConstrParam :: String -> [Tyvar] -> Ty -> IO Ty 
-mkConstrParam s vs (_ :-> _) 
-  = pure $ TyCon (Name s) (TyVar <$> vs)
-mkConstrParam _ _ t = pure t 
+mkConstrParam :: String -> [Tyvar] -> Ty -> Ty -> Ty 
+mkConstrParam s vs rt t@(_ :-> _) 
+  | rt @= t 
+    = TyCon (Name s) (TyVar <$> (fv t))
+  | otherwise = t 
+mkConstrParam _ _ _ t = t 
+
+(@=) :: Ty -> Ty -> Bool 
+(TyVar _) @= (TyVar _) = True 
+(TyCon n ts) @= (TyCon n' ts')
+  | n == n' && length ts == length ts' 
+    = and (zipWith (@=) ts ts')
+  | otherwise = False 
 
 -- determining free variables 
 
@@ -84,13 +97,20 @@ instance Vars (Exp Id) where
   vars (Var n) = [n]
   vars (Con _ es) = vars es 
   vars (FieldAccess e _) = vars e
-  vars (Call (Just e) n es) = vars (e : es)
-  vars (Call Nothing n es) = vars es 
-  vars (Lam ps bd) = vars bd \\ vars ps
+  vars (Call (Just e) n es) = [n] `union` vars (e : es)
+  vars (Call Nothing n es) = [n] `union` vars es 
+  vars (Lam ps bd _) = vars bd \\ vars ps
   vars _ = []
 
 instance Vars LamDef where 
-  vars (LamDef ps ss) = vars ss \\ vars ps
+  vars (LamDef ps ss _) 
+    = vars ss \\ ps' 
+      where 
+        vs = vars ps 
+        isFun (_ :-> _) = True 
+        isFun _ = False
+        ps' = filter (not . isFun . idType) vs
+
 
 -- collecting all lambdas that are parameter of high-order functions 
 
@@ -159,8 +179,12 @@ instance CollectLam (Exp Id) where
 collectArgs :: Name -> [Exp Id] -> Map Name [LamDef]
 collectArgs n = foldr step Map.empty 
   where 
-    step (Lam args bd) ac = Map.insertWith (++) n [LamDef args bd] ac  
+    step (Lam args bd (Just bt)) ac 
+      = Map.insertWith (++) n [LamDef args bd (mkTy args bt)] ac  
     step e ac = Map.unionWith (++) (collectLam e) ac
+    mkTy args t 
+      = funtype (map paramTy args) t 
+    paramTy (Typed _ t) = t 
 
 -- definition of a monad for defunctionalization 
 

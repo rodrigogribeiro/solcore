@@ -58,7 +58,7 @@ data Exp a
   | FieldAccess (Exp a) a              -- field access  
   | Lit Literal                        -- literal 
   | Call (Maybe (Exp a)) a [Exp a]     -- function call
-  | Lam [Param a] (Body a)               -- lambda-abstraction
+  | Lam [Param a] (Body a) (Maybe Ty)  -- lambda-abstraction
   deriving (Eq, Ord, Show, Data, Typeable)
 
 -- pattern matching equations 

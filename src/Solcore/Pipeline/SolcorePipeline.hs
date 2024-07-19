@@ -2,6 +2,8 @@ module Solcore.Pipeline.SolcorePipeline where
 
 import Control.Monad
 
+import qualified Data.Map as Map 
+
 import Options.Applicative
 
 import Solcore.Desugarer.Defunctionalization
@@ -37,8 +39,9 @@ pipeline = do
           when verbose do 
             putStrLn "Specialised contract:"
             putStrLn (pretty r5)
-          defunctionalize res 
+          defunctionalize (Map.keys (ctx env)) res 
           return ()
+
 withErr :: Either String a -> (a -> IO ()) -> IO ()
 withErr r f = either putStrLn f r
 

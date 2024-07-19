@@ -47,8 +47,8 @@ instance ReplaceWildcard (Exp Id) where
     = Call <$> (replace me) <*> 
                pure n <*> 
                replace es
-  replace (Lam args bd) 
-    = Lam args <$> replace bd
+  replace (Lam args bd mt) 
+    = Lam args <$> replace bd <*> pure mt
 
 instance ReplaceWildcard (Stmt Id) where 
   replace (e1 := e2) 

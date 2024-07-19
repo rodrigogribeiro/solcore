@@ -262,7 +262,7 @@ instance Pretty a => Pretty (Exp a) where
   ppr (Lit l) = ppr l 
   ppr (Call e n es) 
     = pprE e <> ppr n <> (parens $ commaSep $ map ppr es)
-  ppr (Lam args bd) 
+  ppr (Lam args bd _) 
     = text "lam" <+> 
       pprParams args <+> 
       lbrace $$ 

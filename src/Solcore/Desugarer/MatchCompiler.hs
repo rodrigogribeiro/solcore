@@ -340,8 +340,8 @@ instance Apply (Exp Id) where
   apply _ e@(Lit _) = e 
   apply s (Call me n es)
     = Call (apply s me) n (apply s es)
-  apply s (Lam args bd) 
-    = Lam args (apply s bd)
+  apply s (Lam args bd mt) 
+    = Lam args (apply s bd) mt
 
 instance Apply Pat where 
   apply _ p = p

@@ -168,13 +168,13 @@ tcExp (FieldAccess e n)
       pure (FieldAccess e' (Id n t'), ps ++ ps', t')
 tcExp (Call me n args)
   = tcCall me n args 
-tcExp e@(Lam args bd)
+tcExp e@(Lam args bd _)
   = do 
       (args', ts') <- unzip <$> mapM addArg args 
       (bd',ps,t') <- tcBody bd 
       s <- getSubst
       let (ps1,t1) = apply s (ps, funtype ts' t')
-          e' = everywhere (mkT (applyI s)) (Lam args' bd')
+          e' = everywhere (mkT (applyI s)) (Lam args' bd' (Just t'))
       pure (e', ps1, t1)
 
 applyI :: Subst -> Ty -> Ty 

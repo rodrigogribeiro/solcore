@@ -273,7 +273,7 @@ pprE :: Pretty a => Maybe (Exp a) -> Doc
 pprE Nothing = ""
 pprE (Just e) = ppr e <> text "."
 
-instance Pretty Pat where 
+instance Pretty a => Pretty (Pat a) where 
   ppr (PVar n) 
     = ppr n
   ppr (PCon n []) = ppr n

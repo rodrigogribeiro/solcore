@@ -156,12 +156,12 @@ thirdCase (e : es) d eqns
           eqns' = map (\ (_ : ps, ss) -> (ps, apply s ss)) eqns
           t = typeOfExp e
       res <- matchCompilerM es d eqns' 
-      return (Let x (Just t) (Just e) : res) 
+      return (Let (Id n t) (Just t) (Just e) : res) 
 
 typeOfExp :: Exp Id -> Ty
 typeOfExp (Var i)               = idType i
 typeOfExp (Con i [])            = idType i
-typeOfExp e@(Con i args)          = go (idType i) args where
+typeOfExp e@(Con i args)        = go (idType i) args where
   go ty [] = ty
   go (_ :-> u) (a:as) = go u as
   go _ _ = error $ "typeOfExp: " ++ show e
@@ -253,13 +253,22 @@ buildEquation (_ : es) d (p : ps, ss)
         (p', ps', vs) <- instantiatePat p
         ([p'],) <$> matchCompilerM (vs ++ es) d [(ps' ++ ps, ss)] 
 
-instantiatePat :: Pat -> CompilerM (Pat, [Pat], [Exp Id])
+instantiatePat :: Pat Id -> CompilerM (Pat Id, [Pat Id], [Exp Id])
 instantiatePat p@(PLit _) = return (p, [], [])
 instantiatePat (PCon n ps)
   = do
-      vs <- mapM (const freshId) ps 
-      let vs' = map (\ (Id n _) -> n) vs
-      return (PCon n (map PVar vs'), ps, map Var vs)
+      ns <- mapM (const freshName) ps
+      ts <- mapM tyFromPat ps 
+      let vs = zipWith Id ns ts
+      return (PCon n (map PVar vs), ps, map Var vs)
+
+tyFromPat :: Pat Id -> CompilerM Ty 
+tyFromPat (PVar (Id _ t)) = pure t
+tyFromPat (PLit _) = pure word
+tyFromPat (PCon (Id _ t) _) 
+  = maybe err pure (retTy t) 
+    where 
+      err = throwError "Impossible! Should have return type!"
 
 groupByConstr :: Equations Id -> [Equations Id]
 groupByConstr 
@@ -291,7 +300,7 @@ hasConstrsBeforeVars eqns
     in (not $ null cs) && all isVar vs 
 
 
-isConstr :: ([Pat], [Stmt Id]) -> Bool 
+isConstr :: ([Pat Id], [Stmt Id]) -> Bool 
 isConstr ((PCon _ _) : _, _) = True 
 isConstr ((PLit _) : _, _) = True
 isConstr _ = False
@@ -353,10 +362,10 @@ instance Apply (Exp Id) where
   apply s (Lam args bd mt) 
     = Lam args (apply s bd) mt
 
-instance Apply Pat where 
+instance Apply (Pat Id) where 
   apply _ p = p
 
-  vars (PVar v) = [v]
+  vars (PVar (Id v _)) = [v]
   vars (PCon _ ps) = foldr (union . vars) [] ps 
   vars _ = []
 

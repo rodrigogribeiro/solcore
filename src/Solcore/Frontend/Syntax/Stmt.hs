@@ -7,7 +7,7 @@ import Solcore.Frontend.Syntax.Ty
 
 -- definition of statements 
 
-type Equation a = ([Pat], [Stmt a])
+type Equation a = ([Pat a], [Stmt a])
 type Equations a = [Equation a]
 
 data Stmt a
@@ -63,9 +63,9 @@ data Exp a
 
 -- pattern matching equations 
 
-data Pat 
-  = PVar Name 
-  | PCon Name [Pat] 
+data Pat a 
+  = PVar a 
+  | PCon a [Pat a] 
   | PWildcard 
   | PLit Literal 
   deriving (Eq, Ord, Show, Data, Typeable)

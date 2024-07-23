@@ -14,7 +14,7 @@ import Solcore.Frontend.Pretty.SolcorePretty
 import Solcore.Frontend.TypeInference.SccAnalysis
 import Solcore.Frontend.TypeInference.TcContract
 import Solcore.Frontend.TypeInference.TcEnv
-import Solcore.Desugarer.Specialise
+-- import Solcore.Desugarer.Specialise
 
 -- main compiler driver function
 
@@ -35,10 +35,10 @@ pipeline = do
           when verbose do
             putStrLn "Desugared contract:"
             putStrLn (pretty res)
-          when False do
+{-          when False do
             r5 <- specialiseCompUnit res env
             putStrLn "Specialised contract:"
-            putStrLn (pretty r5)
+            putStrLn (pretty r5) -}
           defunctionalize env res 
           return ()
 

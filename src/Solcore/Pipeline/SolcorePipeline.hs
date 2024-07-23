@@ -35,11 +35,11 @@ pipeline = do
           when verbose do
             putStrLn "Desugared contract:"
             putStrLn (pretty res)
-          r5 <- specialiseCompUnit res env
-          when verbose do 
+          when False do
+            r5 <- specialiseCompUnit res env
             putStrLn "Specialised contract:"
             putStrLn (pretty r5)
-          defunctionalize (Map.keys (ctx env)) res 
+          defunctionalize env res 
           return ()
 
 withErr :: Either String a -> (a -> IO ()) -> IO ()

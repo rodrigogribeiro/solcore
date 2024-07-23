@@ -43,14 +43,6 @@ matchCompiler (CompUnit imps ds)
         ([], cons') -> return $ Right $ CompUnit imps (concat cons')
         (errs, _)   -> return $ Left $ unlines errs
 
-{-
- - Need to fix it here. 
- -
- - I need to do recurse this over contracts, 
- - however, I need to write functions only 
- - in the current scope
- -}
-
 matchCompilerDecl :: (Int, TopDecl Id) -> IO (Either String [TopDecl Id])
 matchCompilerDecl (_, TContr (Contract n vs ds))
   = do 
@@ -60,7 +52,7 @@ matchCompilerDecl (_, TContr (Contract n vs ds))
         (Right ds', fs) -> return $ Right [TContr (Contract n vs (ds' ++ map CFunDecl fs))]
 matchCompilerDecl (i, d)
   = do 
-      let n = Name ("foo" ++ show i)
+      let n = Name ("Global" ++ show i)
       res <- runCompilerM [n] (compile d)
       case res of 
         (Left err, _) -> return $ Left err 
@@ -157,13 +149,31 @@ thirdCase _ _ []
   = throwError "Panic! Impossible --- thirdCase."
 thirdCase (e : es) d eqns 
   = do 
-      x@(Id n t) <- freshId
+      x@(Id n _) <- freshId
       let 
           vs = foldr (union . L.head . L.fromList . map vars . fst) [] eqns 
           s  = map (\ vi -> (vi, n)) vs 
           eqns' = map (\ (_ : ps, ss) -> (ps, apply s ss)) eqns
+          t = typeOfExp e
       res <- matchCompilerM es d eqns' 
       return (Let x (Just t) (Just e) : res) 
+
+typeOfExp :: Exp Id -> Ty
+typeOfExp (Var i)               = idType i
+typeOfExp (Con i [])            = idType i
+typeOfExp e@(Con i args)          = go (idType i) args where
+  go ty [] = ty
+  go (_ :-> u) (a:as) = go u as
+  go _ _ = error $ "typeOfExp: " ++ show e
+typeOfExp (Lit (IntLit _))      = word --TyCon "Word" []
+typeOfExp (Call Nothing i args) = idType i
+typeOfExp (Lam args body (Just tb))       = funtype tas tb where
+  tas = map paramTy args
+typeOfExp e = error $ "typeOfExp: " ++ show e
+
+paramTy :: Param Id -> Ty 
+paramTy (Typed i _) = idType i 
+paramTy (Untyped i) = idType i 
 
 -- Implementation of the fourth case 
 

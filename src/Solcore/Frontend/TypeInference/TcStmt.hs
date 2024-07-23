@@ -174,7 +174,7 @@ tcExp e@(Lam args bd _)
       (bd',ps,t') <- tcBody bd 
       s <- getSubst
       let (ps1,t1) = apply s (ps, funtype ts' t')
-          e' = everywhere (mkT (applyI s)) (Lam args' bd' (Just t'))
+          e' = everywhere (mkT (applyI s)) (Lam args' bd' (Just t1))
       pure (e', ps1, t1)
 
 applyI :: Subst -> Ty -> Ty 
